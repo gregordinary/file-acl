@@ -10,8 +10,9 @@ body:
         [SECURITY.md](https://github.com/gregordinary/file-acl/blob/main/SECURITY.md).
 
         The cases where file-acl reads or writes otherwise than a reference
-        on purpose are listed in its documentation; a case it lists is not a
-        new defect.
+        on purpose are documented. The `text` module lists them for the text
+        form, and `xattr::decode` for the binary form. A case listed there is
+        not a new defect.
   - type: textarea
     id: summary
     attributes:

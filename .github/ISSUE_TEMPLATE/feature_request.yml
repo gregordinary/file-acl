@@ -16,7 +16,7 @@ body:
       description: >
         An API, a form of list file-acl does not read or write, a tool whose
         spelling it does not follow: whatever shape you imagine. A sketch is
-        enough; the shape is discussable.
+        enough. The shape is open to discussion.
   - type: textarea
     id: material
     attributes:
