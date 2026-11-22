@@ -163,7 +163,7 @@ fn kernel_table() -> Vec<(&'static str, &'static str, Decoded)> {
             Err(DecodeError::Partial { len: 30 }),
         ),
         (
-            "owner, owning group and other entries carrying id 0: accepted, ids ignored",
+            "owner, owning group and other entries with id 0: accepted, ids ignored",
             "02000000 0100 0600 00000000 0400 0400 00000000 2000 0000 00000000",
             Ok(Some(minimal())),
         ),
@@ -358,7 +358,7 @@ fn kernel_table() -> Vec<(&'static str, &'static str, Decoded)> {
             }),
         ),
         (
-            "object entries carrying ids, the mask among them: accepted, read back as 0xFFFFFFFF",
+            "object entries with ids, the mask among them: accepted, read back as 0xFFFFFFFF",
             "02000000 0100 0600 e8030000 0200 0400 e8030000 0400 0400 07000000 \
              1000 0600 07000000 2000 0000 07000000",
             Ok(Some(acl(&[
@@ -471,7 +471,7 @@ fn each_rule_a_value_breaks_says_what_breaks_it() {
                 entry: 1,
                 tag: Tag::User,
             },
-            "the named user entry at position 1 carries the undefined id 4294967295, \
+            "the named user entry at position 1 has the undefined id 4294967295, \
              as read for an id the reader's user namespace does not map",
         ),
         (
@@ -513,7 +513,7 @@ fn unpack(value: &[u8]) -> Vec<Record> {
 }
 
 /// A valid list's entries as records, in canonical order, the object
-/// entries carrying `UNDEFINED_ID`.
+/// entries with `UNDEFINED_ID` as their id.
 fn valid_records(rng: &mut Rng, ids: &[u32]) -> Vec<Record> {
     let perm = |rng: &mut Rng| rng.below(8) as u16;
     let named = |rng: &mut Rng| {

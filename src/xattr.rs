@@ -302,7 +302,7 @@ impl fmt::Display for DecodeError {
             ),
             DecodeError::UnmappedId { entry, tag } => write!(
                 f,
-                "the {tag} entry at position {entry} carries the undefined id {UNDEFINED_ID}, \
+                "the {tag} entry at position {entry} has the undefined id {UNDEFINED_ID}, \
                  as read for an id the reader's user namespace does not map"
             ),
             DecodeError::Invalid(invalid) => invalid.fmt(f),

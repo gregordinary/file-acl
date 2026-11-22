@@ -207,7 +207,7 @@ fn a_broken_rule_says_what_breaks_it() {
         ),
         (
             Invalid::UndefinedId { tag: Tag::Group },
-            "a named group entry carries the undefined id 4294967295",
+            "a named group entry has the undefined id 4294967295",
         ),
     ] {
         assert_eq!(invalid.to_string(), text);
@@ -334,7 +334,7 @@ fn libacl_verdict(oracle: &mut Oracle, text: &str) -> Option<Result<(), u32>> {
 /// (measured with libacl 2.3): `Missing or wrong entry` for an absent entry,
 /// and also for other repeated; `Multiple entries of same type` for the
 /// owner, owning group or mask repeated; `Duplicate entries` for a user or
-/// group named twice. For a named entry carrying the undefined id it answers
+/// group named twice. For a named entry with the undefined id it answers
 /// either `Duplicate entries` or `Missing or wrong entry`, depending on where
 /// the text places the entry, so either is taken.
 fn libacl_codes(invalid: Invalid) -> &'static [u32] {

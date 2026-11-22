@@ -518,7 +518,7 @@ impl fmt::Display for Invalid {
                 write!(f, "the list has more than one {qualifier} entry")
             }
             Invalid::UndefinedId { tag } => {
-                write!(f, "a {tag} entry carries the undefined id {UNDEFINED_ID}")
+                write!(f, "a {tag} entry has the undefined id {UNDEFINED_ID}")
             }
         }
     }
