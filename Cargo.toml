@@ -6,7 +6,7 @@ rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/gregordinary/file-acl"
 documentation = "https://docs.rs/file-acl"
-description = "POSIX.1e access control lists as data: the binary attribute value Linux stores, the text form getfacl and tar records use, and their validity rules, in safe Rust."
+description = "POSIX.1e access control lists as data, in safe Rust: the binary value Linux stores, the text form getfacl and tar use, and their validity rules."
 keywords = ["acl", "posix", "xattr", "getfacl", "permissions"]
 categories = ["filesystem", "encoding", "parser-implementations", "no-std"]
 # What ships is the library and its documentation. The integration tests and

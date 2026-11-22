@@ -1,18 +1,22 @@
 //! POSIX.1e access control lists as data, in safe Rust.
 //!
-//! file-acl holds the model of a POSIX access control list, its validity
-//! rules, the binary form Linux's extended attributes carry it in, the text
-//! form tar archives carry and `getfacl --omit-header` writes, the rules that
-//! tie a list to a file's mode, and the restatement of a list's ids through a translation
-//! ([`Acl::map_ids`]), with no I/O: reading and writing extended attributes,
-//! and looking up user and group names, are the caller's. It contains no
-//! `unsafe` code, has no dependencies, and needs nothing from its platform but
-//! an allocator. It is in early development.
+//! file-acl holds the model of a POSIX access control list: its entries, the
+//! rules a valid list keeps, and the canonical order of its entries. It reads
+//! and writes a list's binary form, the value Linux's extended attributes
+//! hold. It also reads and writes its text form, which tar's `SCHILY.acl.*`
+//! records hold and `getfacl --omit-header` prints. It keeps a list and a
+//! file's mode in step as the kernel does, and restates a list's ids through
+//! a translation ([`Acl::map_ids`]).
+//!
+//! It does no I/O: reading and writing extended attributes, and looking up
+//! user and group names, are the caller's. It contains no `unsafe` code, has
+//! no dependencies, and needs nothing from its platform but an allocator. It
+//! is in early development. Its API is not yet stable.
 //!
 //! An [`Acl`] is a list of [`Entry`]s, each granting a [`Perm`] to the user or
 //! group its [`Qualifier`] names. An `Acl` is always valid, as the kernel and
-//! libacl judge a list, and always in the order they hold its entries in, so
-//! two lists holding the same entries, in any order, are equal:
+//! libacl judge a list. It is always in the order they hold its entries in,
+//! so two lists holding the same entries, in any order, are equal:
 //!
 //! ```
 //! use file_acl::{Acl, Entry, Perm, Qualifier};
@@ -58,9 +62,9 @@
 //!
 //! [`text`] reads the text form as libacl reads it, but for the differences
 //! the module lists. It writes the form as GNU tar writes it in its
-//! `SCHILY.acl.access` and `SCHILY.acl.default` records. A
-//! text names users and groups by id or by name; the caller says what each
-//! name stands for:
+//! `SCHILY.acl.access` and `SCHILY.acl.default` records. A text names users
+//! and groups by id or by name, and the caller says what each name stands
+//! for:
 //!
 //! ```
 //! use file_acl::text::{self, Prefer, Spelling};
@@ -78,10 +82,10 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! [`mode`] keeps a list and a file's mode in step as the kernel does: what
-//! setting a list does to the mode, and whether the list is stored at all;
-//! what `chmod` does to a list; and the list a file is given in place of one
-//! it cannot carry:
+//! [`mode`] keeps a list and a file's mode in step as the kernel does. It
+//! says what setting a list does to the mode, and whether the list is stored
+//! at all. It says what `chmod` does to a list, and gives the list to set in
+//! place of one a file cannot have:
 //!
 //! ```
 //! use file_acl::mode::{self, FileKind, ListKind};
@@ -108,7 +112,7 @@
 #![no_std]
 // The manifest forbids `unsafe` code too; the attribute holds wherever the
 // crate is built, Cargo or not. Doctests are crates of their own, which
-// neither reaches, so they carry it as well, beside the `allow(unused)`
+// neither reaches, so they have it as well, beside the `allow(unused)`
 // rustdoc gives them only where no attribute is named.
 #![forbid(unsafe_code)]
 #![doc(test(attr(allow(unused), forbid(unsafe_code))))]
@@ -116,7 +120,7 @@
 // does not control, so a panic in library code is a decision made where the
 // code is written rather than a finding a fuzzer reports later. Each lint below
 // names a way to panic, or to compute a wrong length silently; a site that
-// genuinely cannot fail and is clearer written directly carries
+// genuinely cannot fail and is clearer written directly has
 // `#[expect(..., reason = "...")]` on the smallest item that holds it, with the
 // reason stating the invariant. Tests are exempt: there a panic is how a check
 // fails.
