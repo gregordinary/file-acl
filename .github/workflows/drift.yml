@@ -149,6 +149,12 @@ jobs:
         # As in CI: the text comparisons run libacl in user and mount
         # namespaces, with the tests' account database.
         run: sudo sysctl --ignore --write kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Install attr's headers
+        # libacl's build includes attr's headers, which the runner image does
+        # not carry.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libattr1-dev
       - name: Build libacl's newest release
         # The newest release in libacl's release directory, its tarball
         # checked against its signature before anything is unpacked. Savannah
