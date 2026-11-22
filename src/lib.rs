@@ -31,8 +31,8 @@
 //!
 //! [`xattr`] reads and writes the value of the `system.posix_acl_access` and
 //! `system.posix_acl_default` extended attributes. It accepts a value where
-//! the kernel accepts one, but for a value naming a user or group twice, and
-//! names the rule a refused value breaks:
+//! the kernel accepts one in the initial user namespace, but for one naming a
+//! user or group twice. It names the rule a refused value breaks:
 //!
 //! ```
 //! use file_acl::xattr::{self, DecodeError};
@@ -56,8 +56,9 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! [`text`] reads and writes the text form, as libacl reads it and GNU tar
-//! writes it in its `SCHILY.acl.access` and `SCHILY.acl.default` records. A
+//! [`text`] reads the text form as libacl reads it, but for the differences
+//! the module lists. It writes the form as GNU tar writes it in its
+//! `SCHILY.acl.access` and `SCHILY.acl.default` records. A
 //! text names users and groups by id or by name; the caller says what each
 //! name stands for:
 //!

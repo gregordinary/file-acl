@@ -217,8 +217,9 @@ input that fails is saved under `fuzz/artifacts/` and replays with
   is clearer written directly, carries `#[expect(lint, reason = "...")]` on
   the smallest item that holds it, with the reason stating the invariant that
   makes it safe. Tests are exempt.
-- **Bounded work.** Reading and writing are linear in their input, and
-  nothing recurses on it.
+- **Bounded work.** Reading and writing are linear in their input, but for
+  sorting a list's entries, which is `O(n log n)`. Nothing recurses on the
+  input.
 - **`no_std` with `alloc`.** The library needs an allocator and nothing else
   from its platform.
 - **Errors are typed and say what.** An error names the rule broken and the

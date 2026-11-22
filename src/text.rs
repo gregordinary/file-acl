@@ -96,11 +96,11 @@
 //!
 //! And [`parse`] reads the fourth field, which libacl refuses.
 //!
-//! The tests compare [`parse`] and [`Parsed::resolve`] with libacl, 2.3 or
-//! 2.4, whichever is present: `tests/text.rs` holds every text libacl was
-//! measured reading, with 2.4's reading where it differs, and reads a
-//! generated corpus with libacl beside the crate, names resolved through the
-//! same account database.
+//! The tests compare [`parse`] and [`Parsed::resolve`] with libacl 2.3 or
+//! 2.4, whichever is present. They hold every text libacl was measured
+//! reading, with 2.4's reading where it differs. They also read a generated
+//! corpus with libacl beside the crate, names resolved through the same
+//! account database.
 //!
 //! # Other readers
 //!
@@ -115,7 +115,7 @@
 //! does not, and refuses a text holding a `#`, a comment's included. So a name
 //! that needs escaping is read by all three only in [`Spelling::STAR`], which
 //! records each name's id: GNU tar resolves the name, libarchive falls back on
-//! the id, and star does either. `tests/tar.rs` extracts text written in each
+//! the id, and star does either. The tests extract text written in each
 //! spelling with GNU tar and bsdtar.
 
 use alloc::string::ToString as _;

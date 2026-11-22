@@ -3,7 +3,7 @@
 //! A file's access list and its mode are two views of one set of
 //! permissions. The kernel keeps them in step: setting an access list sets the
 //! mode's permission bits from it, and `chmod` sets the list's entries from
-//! the mode. A list that says no more than a mode does, the
+//! the mode. An access list that says no more than a mode does, the
 //! [minimal](Acl::is_minimal) one, is not stored at all. [`set`] applies
 //! these rules for a caller with no kernel to ask, such as a program writing
 //! a filesystem image, so that what it writes is what the kernel would have

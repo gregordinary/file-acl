@@ -34,9 +34,11 @@ advisory names the reporter unless you ask otherwise.
 - **A list accepted that the kernel refuses**, or one refused that it
   accepts, other than as the documentation states.
 - **Panics and runaway work on hostile input.** The library is written not to
-  panic, and its work is linear in its input. A panic, or time or memory that
-  grows faster than that, on any value or text, is a vulnerability, since
-  values and texts come from outside the caller's control.
+  panic. Its time and memory are linear in its input, but for sorting a list's
+  entries, which takes `O(n log n)` time in their number. A panic, or time or
+  memory that grows faster than that, on any value or text, is a
+  vulnerability, since values and texts come from outside the caller's
+  control.
 
 ## What is not in scope
 
