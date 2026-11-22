@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a list file-acl reads or writes otherwise than the kernel, libacl or GNU tar, or another defect.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not report a security issue here. Use the private channel
+        described in
+        [SECURITY.md](https://github.com/gregordinary/file-acl/blob/main/SECURITY.md).
+
+        The cases where file-acl reads or writes otherwise than a reference
+        on purpose are listed in its documentation; a case it lists is not a
+        new defect.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: The input
+      description: >
+        The attribute value as hexadecimal (`getfattr -e hex -n
+        system.posix_acl_access FILE`), or the list's text, and the call that
+        read or wrote it.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: answers
+    attributes:
+      label: What the reference and file-acl answer
+      description: >
+        What the kernel, `getfacl`, `setfacl` or GNU tar does with the input,
+        and what file-acl returned.
+      render: text
+  - type: input
+    id: references
+    attributes:
+      label: Reference versions
+      description: The kernel, libacl or GNU tar version you compared with.
+  - type: input
+    id: version
+    attributes:
+      label: file-acl version
+      description: The commit or crate version.
+    validations:
+      required: true

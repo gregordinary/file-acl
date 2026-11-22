@@ -1,0 +1,3 @@
+# The reference oracle is run by the tests as written; a checkout that
+# rewrote its line endings would hand Python a different program.
+/tests/oracle.py text eol=lf

@@ -1,0 +1,216 @@
+name: Drift
+
+# The comparisons with two references, run with each one's newest release:
+# bsdtar (libarchive) extracting the text file-acl writes, and file-acl reading
+# the records bsdtar writes; and libacl reading and checking the text form, and
+# answering the mode rules, beside file-acl.
+#
+# Its own workflow rather than a job in CI, because it reaches the network for
+# whatever libarchive and libacl have released. A reference changes when it
+# releases, not when a pull request changes this code, so it runs on a
+# schedule and never on a pull request. CI runs the same comparisons with
+# Ubuntu's bsdtar and libacl on every change.
+on:
+  schedule:
+    # Weekly, early on a Monday.
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Bash with `-eo pipefail`: a step fails where any command of a pipeline
+    # fails, not only its last.
+    shell: bash
+
+jobs:
+  bsdtar:
+    name: The comparisons with libarchive's newest bsdtar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned)
+        run: rustup toolchain install
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Lift the user-namespace restriction
+        # As in CI: bsdtar runs in user and mount namespaces mapping the
+        # user's subordinate ids, with the tests' account database.
+        run: sudo sysctl --ignore --write kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Give the user subordinate ids
+        run: |
+          command -v newuidmap > /dev/null || { sudo apt-get update && sudo apt-get install --yes uidmap; }
+          user="$(id --user --name)"
+          grep --quiet "^$user:" /etc/subuid || sudo usermod --add-subuids 100000-165535 "$user"
+          grep --quiet "^$user:" /etc/subgid || sudo usermod --add-subgids 100000-165535 "$user"
+      - name: Find libarchive's newest release
+        # The release, and its tarball's SHA-256, as libarchive's GitHub
+        # release states them. The token raises the API's rate limit, and the
+        # lookup works without one; it is given to this step alone, so the
+        # build scripts the next step runs never see it.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          auth=()
+          if [ -n "${GITHUB_TOKEN:-}" ]; then
+            auth=(--header "Authorization: Bearer $GITHUB_TOKEN")
+          fi
+          found=$(
+            curl --fail --silent --show-error --location "${auth[@]}" \
+              https://api.github.com/repos/libarchive/libarchive/releases/latest |
+              python3 -I -c '
+          import json, sys
+          release = json.load(sys.stdin)
+          version = release["tag_name"].removeprefix("v")
+          for asset in release["assets"]:
+              if asset["name"] == f"libarchive-{version}.tar.xz":
+                  print(version, asset["digest"].removeprefix("sha256:"))
+                  break
+          else:
+              sys.exit(f"libarchive {version}: no tarball with a digest")
+          '
+          )
+          read -r version digest <<< "$found"
+          {
+            echo "LIBARCHIVE_NEWEST=$version"
+            echo "LIBARCHIVE_DIGEST=$digest"
+          } >> "$GITHUB_ENV"
+      - name: Build libarchive's newest bsdtar
+        # The tarball is checked against the release's digest before
+        # anything is unpacked. bsdtar is built with access control lists,
+        # which need libacl's headers, and without the compression and
+        # cryptography libraries, which the comparisons' plain pax archives do
+        # not use, so the build does not vary with what the runner has
+        # installed. configure drops list support silently where libacl's
+        # headers are missing, so the step fails unless bsdtar's version line
+        # names libacl.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libacl1-dev
+          version=$LIBARCHIVE_NEWEST
+          digest=$LIBARCHIVE_DIGEST
+          work="$RUNNER_TEMP/libarchive-build"
+          prefix="$RUNNER_TEMP/libarchive"
+          mkdir -p "$work/build"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$work/libarchive.tar.xz" \
+            "https://github.com/libarchive/libarchive/releases/download/v$version/libarchive-$version.tar.xz"
+          echo "$digest  $work/libarchive.tar.xz" | sha256sum --check --strict --quiet
+          tar -xJf "$work/libarchive.tar.xz" -C "$work"
+          cd "$work/build"
+          "../libarchive-$version/configure" --prefix="$prefix" \
+            --disable-shared --enable-static --enable-bsdtar=static \
+            --disable-bsdcat --disable-bsdcpio --disable-bsdunzip \
+            --enable-acl --enable-xattr \
+            --without-zlib --without-bz2lib --without-libb2 --without-lz4 \
+            --without-zstd --without-lzma --without-cng --without-openssl \
+            --without-xml2 --without-expat > configure.log 2>&1 ||
+            { cat configure.log; exit 1; }
+          make -j"$(nproc)" > make.log 2>&1 || { tail -n 50 make.log; exit 1; }
+          make install > /dev/null
+          reported=$("$prefix/bin/bsdtar" --version)
+          case $reported in
+            "bsdtar $version "*libacl/*) echo "$reported" ;;
+            *) echo "bsdtar reports \`$reported\`: not $version with libacl"; exit 1 ;;
+          esac
+          echo "FILE_ACL_BSDTAR=$prefix/bin/bsdtar" >> "$GITHUB_ENV"
+      - name: Compare with it
+        # A failure is the finding: the newest bsdtar reads the crate's text,
+        # or writes its own records, otherwise than the tests hold. The answer
+        # is a measurement of the release, and a change to the crate or to
+        # its stated differences.
+        run: |
+          echo "libarchive $LIBARCHIVE_NEWEST" >> "$GITHUB_STEP_SUMMARY"
+          cargo test --test tar --test references bsdtar
+        env:
+          FILE_ACL_REQUIRE_BSDTAR: '1'
+
+  libacl:
+    name: The comparisons with libacl's newest release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned)
+        run: rustup toolchain install
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Lift the user-namespace restriction
+        # As in CI: the text comparisons run libacl in user and mount
+        # namespaces, with the tests' account database.
+        run: sudo sysctl --ignore --write kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Build libacl's newest release
+        # The newest release in libacl's release directory, its tarball
+        # checked against its signature before anything is unpacked. Savannah
+        # publishes no release keyring for the project, so the signature is
+        # checked against the keyring of the project's members, which it
+        # publishes. The library is installed under the runner's temporary
+        # directory, and the step fails unless Python, loading libacl as the
+        # tests' oracle does, loads that build.
+        run: |
+          base=https://download.savannah.nongnu.org/releases/acl
+          version=$(
+            curl --fail --silent --show-error --location "$base/" |
+              grep --only-matching --extended-regexp 'acl-[0-9]+(\.[0-9]+)+\.tar\.xz' |
+              sed 's/^acl-//; s/\.tar\.xz$//' | sort --unique --version-sort | tail -n 1
+          )
+          [ -n "$version" ] || { echo "no release found in $base/"; exit 1; }
+          work="$RUNNER_TEMP/libacl-build"
+          prefix="$RUNNER_TEMP/libacl"
+          mkdir -p "$work/build"
+          mkdir -m 700 "$work/gnupg"
+          for file in "acl-$version.tar.xz" "acl-$version.tar.xz.sig"; do
+            curl --fail --silent --show-error --location --retry 3 \
+              --output "$work/$file" "$base/$file"
+          done
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$work/members.asc" \
+            "https://savannah.nongnu.org/project/memberlist-gpgkeys.php?group=acl&download=1"
+          gpg --homedir "$work/gnupg" --batch --quiet --import "$work/members.asc"
+          gpgv --homedir "$work/gnupg" --keyring "$work/gnupg/pubring.kbx" \
+            "$work/acl-$version.tar.xz.sig" "$work/acl-$version.tar.xz"
+          tar -xJf "$work/acl-$version.tar.xz" -C "$work"
+          cd "$work/build"
+          "../acl-$version/configure" --prefix="$prefix" --disable-static --disable-nls \
+            > configure.log 2>&1 || { cat configure.log; exit 1; }
+          make -j"$(nproc)" > make.log 2>&1 || { tail -n 50 make.log; exit 1; }
+          make install > /dev/null
+          loaded=$(
+            LD_LIBRARY_PATH="$prefix/lib" python3 -I -c 'import ctypes, ctypes.util
+          ctypes.CDLL(ctypes.util.find_library("acl") or "libacl.so.1")
+          print(next(l.split()[-1] for l in open("/proc/self/maps") if "libacl.so" in l))'
+          )
+          case $loaded in
+            "$prefix/lib/libacl.so."*) echo "libacl $version: $loaded" ;;
+            *) echo "Python loads $loaded, not libacl $version under $prefix"; exit 1 ;;
+          esac
+          {
+            echo "LIBACL_LIB=$prefix/lib"
+            echo "LIBACL_NEWEST=$version"
+          } >> "$GITHUB_ENV"
+      - name: Compare with it
+        # A failure is the finding: the newest libacl reads or checks a list,
+        # or answers a mode rule, otherwise than the tests hold. The answer is
+        # a measurement of the release, and a change to the crate or to its
+        # stated differences. The tests are built first, so that only they run
+        # with the newest libacl in place of the system's.
+        run: |
+          echo "libacl $LIBACL_NEWEST" >> "$GITHUB_STEP_SUMMARY"
+          cargo test --test mode --test model --test text --test references --no-run
+          LD_LIBRARY_PATH="$LIBACL_LIB" \
+            cargo test --test mode --test model --test text --test references libacl
+        # The text comparisons read names through an account database in
+        # user and mount namespaces of their own, and skip without them.
+        env:
+          FILE_ACL_REQUIRE_LIBACL: '1'
+          FILE_ACL_REQUIRE_USERNS: '1'

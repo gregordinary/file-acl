@@ -1,0 +1,23 @@
+[package]
+name = "file-acl"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gregordinary/file-acl"
+documentation = "https://docs.rs/file-acl"
+description = "POSIX.1e access control lists as data: the binary attribute value Linux stores, the text form getfacl and tar records use, and their validity rules, in safe Rust."
+keywords = ["acl", "posix", "xattr", "getfacl", "permissions"]
+categories = ["filesystem", "encoding", "parser-implementations", "no-std"]
+# What ships is the library and its documentation. The integration tests and
+# the reference oracle they drive are development inputs, and stay in the
+# repository, where the suite runs.
+include = ["/src", "/README.md", "/CHANGELOG.md", "/LICENSE-APACHE", "/LICENSE-MIT"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[dependencies]

@@ -1,0 +1,44 @@
+[package]
+name = "file-acl-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# Contains `unsafe`: the interface to libFuzzer, which it builds from C++.
+# Here only, never in the library's dependency graph.
+libfuzzer-sys = "0.4"
+file-acl = { path = ".." }
+
+# A workspace of its own, so the fuzzing harness never joins the library's
+# build.
+[workspace]
+members = ["."]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "round_trip"
+path = "fuzz_targets/round_trip.rs"
+test = false
+doc = false
+bench = false

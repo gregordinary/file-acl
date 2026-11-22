@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/gregordinary/file-acl/security/advisories/new
+    about: >
+      Report a list read as granting what its input does not, a panic or
+      runaway work on hostile input, or another security issue, privately,
+      as SECURITY.md describes. Do not open a public issue for one.

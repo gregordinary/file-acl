@@ -1,0 +1,378 @@
+pub mod file_acl
+pub mod file_acl::mode
+pub enum file_acl::mode::FileKind
+pub file_acl::mode::FileKind::Directory
+pub file_acl::mode::FileKind::Other
+pub file_acl::mode::FileKind::SymbolicLink
+impl core::marker::Freeze for file_acl::mode::FileKind
+impl core::marker::Send for file_acl::mode::FileKind
+impl core::marker::Sync for file_acl::mode::FileKind
+impl core::marker::Unpin for file_acl::mode::FileKind
+impl core::marker::UnsafeUnpin for file_acl::mode::FileKind
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::mode::FileKind
+impl core::panic::unwind_safe::UnwindSafe for file_acl::mode::FileKind
+pub enum file_acl::mode::ListKind
+pub file_acl::mode::ListKind::Access
+pub file_acl::mode::ListKind::Default
+impl core::marker::Freeze for file_acl::mode::ListKind
+impl core::marker::Send for file_acl::mode::ListKind
+impl core::marker::Sync for file_acl::mode::ListKind
+impl core::marker::Unpin for file_acl::mode::ListKind
+impl core::marker::UnsafeUnpin for file_acl::mode::ListKind
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::mode::ListKind
+impl core::panic::unwind_safe::UnwindSafe for file_acl::mode::ListKind
+#[non_exhaustive] pub enum file_acl::mode::SetError
+pub file_acl::mode::SetError::NotADirectory
+pub file_acl::mode::SetError::SymbolicLink
+pub file_acl::mode::SetError::TooLong
+impl core::error::Error for file_acl::mode::SetError
+impl core::fmt::Display for file_acl::mode::SetError
+pub fn file_acl::mode::SetError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::mode::SetError
+impl core::marker::Send for file_acl::mode::SetError
+impl core::marker::Sync for file_acl::mode::SetError
+impl core::marker::Unpin for file_acl::mode::SetError
+impl core::marker::UnsafeUnpin for file_acl::mode::SetError
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::mode::SetError
+impl core::panic::unwind_safe::UnwindSafe for file_acl::mode::SetError
+pub struct file_acl::mode::Set
+pub file_acl::mode::Set::list: core::option::Option<file_acl::Acl>
+pub file_acl::mode::Set::mode: u32
+impl core::marker::Freeze for file_acl::mode::Set
+impl core::marker::Send for file_acl::mode::Set
+impl core::marker::Sync for file_acl::mode::Set
+impl core::marker::Unpin for file_acl::mode::Set
+impl core::marker::UnsafeUnpin for file_acl::mode::Set
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::mode::Set
+impl core::panic::unwind_safe::UnwindSafe for file_acl::mode::Set
+pub fn file_acl::mode::set(u32, file_acl::mode::FileKind, file_acl::mode::ListKind, core::option::Option<file_acl::Acl>) -> core::result::Result<file_acl::mode::Set, file_acl::mode::SetError>
+pub mod file_acl::text
+pub enum file_acl::text::Names
+pub file_acl::text::Names::Alone
+pub file_acl::text::Names::WithIds
+impl core::marker::Freeze for file_acl::text::Names
+impl core::marker::Send for file_acl::text::Names
+impl core::marker::Sync for file_acl::text::Names
+impl core::marker::Unpin for file_acl::text::Names
+impl core::marker::UnsafeUnpin for file_acl::text::Names
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Names
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Names
+#[non_exhaustive] pub enum file_acl::text::ParseError
+pub file_acl::text::ParseError::Comment
+pub file_acl::text::ParseError::Comment::at: usize
+pub file_acl::text::ParseError::Escape
+pub file_acl::text::ParseError::Escape::at: usize
+pub file_acl::text::ParseError::Id
+pub file_acl::text::ParseError::Id::at: usize
+pub file_acl::text::ParseError::IdMismatch
+pub file_acl::text::ParseError::IdMismatch::at: usize
+pub file_acl::text::ParseError::Incomplete
+pub file_acl::text::ParseError::Incomplete::at: usize
+pub file_acl::text::ParseError::LeadingComment
+pub file_acl::text::ParseError::LeadingComment::at: usize
+pub file_acl::text::ParseError::LineEnd
+pub file_acl::text::ParseError::LineEnd::at: usize
+pub file_acl::text::ParseError::NoEntry
+pub file_acl::text::ParseError::Nul
+pub file_acl::text::ParseError::Nul::at: usize
+pub file_acl::text::ParseError::Number
+pub file_acl::text::ParseError::Number::at: usize
+pub file_acl::text::ParseError::Perm
+pub file_acl::text::ParseError::Perm::at: usize
+pub file_acl::text::ParseError::Qualifier
+pub file_acl::text::ParseError::Qualifier::at: usize
+pub file_acl::text::ParseError::Separator
+pub file_acl::text::ParseError::Separator::at: usize
+pub file_acl::text::ParseError::Tag
+pub file_acl::text::ParseError::Tag::at: usize
+impl core::error::Error for file_acl::text::ParseError
+impl core::fmt::Display for file_acl::text::ParseError
+pub fn file_acl::text::ParseError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::text::ParseError
+impl core::marker::Send for file_acl::text::ParseError
+impl core::marker::Sync for file_acl::text::ParseError
+impl core::marker::Unpin for file_acl::text::ParseError
+impl core::marker::UnsafeUnpin for file_acl::text::ParseError
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::ParseError
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::ParseError
+pub enum file_acl::text::Prefer
+pub file_acl::text::Prefer::Id
+pub file_acl::text::Prefer::Name
+impl core::marker::Freeze for file_acl::text::Prefer
+impl core::marker::Send for file_acl::text::Prefer
+impl core::marker::Sync for file_acl::text::Prefer
+impl core::marker::Unpin for file_acl::text::Prefer
+impl core::marker::UnsafeUnpin for file_acl::text::Prefer
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Prefer
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Prefer
+#[non_exhaustive] pub enum file_acl::text::ResolveError
+pub file_acl::text::ResolveError::Invalid(file_acl::Invalid)
+pub file_acl::text::ResolveError::Unresolved
+pub file_acl::text::ResolveError::Unresolved::name: alloc::vec::Vec<u8>
+pub file_acl::text::ResolveError::Unresolved::tag: file_acl::Tag
+impl core::convert::From<file_acl::Invalid> for file_acl::text::ResolveError
+pub fn file_acl::text::ResolveError::from(file_acl::Invalid) -> file_acl::text::ResolveError
+impl core::error::Error for file_acl::text::ResolveError
+impl core::fmt::Display for file_acl::text::ResolveError
+pub fn file_acl::text::ResolveError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::text::ResolveError
+impl core::marker::Send for file_acl::text::ResolveError
+impl core::marker::Sync for file_acl::text::ResolveError
+impl core::marker::Unpin for file_acl::text::ResolveError
+impl core::marker::UnsafeUnpin for file_acl::text::ResolveError
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::ResolveError
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::ResolveError
+pub enum file_acl::text::Separator
+pub file_acl::text::Separator::Comma
+pub file_acl::text::Separator::Newline
+impl core::marker::Freeze for file_acl::text::Separator
+impl core::marker::Send for file_acl::text::Separator
+impl core::marker::Sync for file_acl::text::Separator
+impl core::marker::Unpin for file_acl::text::Separator
+impl core::marker::UnsafeUnpin for file_acl::text::Separator
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Separator
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Separator
+pub enum file_acl::text::Tags
+pub file_acl::text::Tags::Long
+pub file_acl::text::Tags::Short
+impl core::marker::Freeze for file_acl::text::Tags
+impl core::marker::Send for file_acl::text::Tags
+impl core::marker::Sync for file_acl::text::Tags
+impl core::marker::Unpin for file_acl::text::Tags
+impl core::marker::UnsafeUnpin for file_acl::text::Tags
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Tags
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Tags
+pub struct file_acl::text::Parsed
+impl file_acl::text::Parsed
+pub fn file_acl::text::Parsed::holds_names(&self) -> bool
+pub fn file_acl::text::Parsed::narrowed(&self) -> core::result::Result<file_acl::Acl, file_acl::Invalid>
+pub fn file_acl::text::Parsed::resolve(&self, impl core::ops::function::FnMut(&[u8]) -> core::option::Option<u32>, impl core::ops::function::FnMut(&[u8]) -> core::option::Option<u32>, file_acl::text::Prefer) -> core::result::Result<file_acl::Acl, file_acl::text::ResolveError>
+pub fn file_acl::text::Parsed::resolve_partial(&self, impl core::ops::function::FnMut(&[u8]) -> core::option::Option<u32>, impl core::ops::function::FnMut(&[u8]) -> core::option::Option<u32>, file_acl::text::Prefer) -> core::result::Result<file_acl::Partial, file_acl::Invalid>
+pub fn file_acl::text::Parsed::with_computed_mask(self) -> file_acl::text::Parsed
+impl core::marker::Freeze for file_acl::text::Parsed
+impl core::marker::Send for file_acl::text::Parsed
+impl core::marker::Sync for file_acl::text::Parsed
+impl core::marker::Unpin for file_acl::text::Parsed
+impl core::marker::UnsafeUnpin for file_acl::text::Parsed
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Parsed
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Parsed
+#[non_exhaustive] pub struct file_acl::text::Spelling
+pub file_acl::text::Spelling::names: file_acl::text::Names
+pub file_acl::text::Spelling::separator: file_acl::text::Separator
+pub file_acl::text::Spelling::tags: file_acl::text::Tags
+impl file_acl::text::Spelling
+pub const file_acl::text::Spelling::GNU_TAR: file_acl::text::Spelling
+pub const file_acl::text::Spelling::STAR: file_acl::text::Spelling
+pub const fn file_acl::text::Spelling::new(file_acl::text::Tags, file_acl::text::Separator, file_acl::text::Names) -> file_acl::text::Spelling
+impl core::marker::Freeze for file_acl::text::Spelling
+impl core::marker::Send for file_acl::text::Spelling
+impl core::marker::Sync for file_acl::text::Spelling
+impl core::marker::Unpin for file_acl::text::Spelling
+impl core::marker::UnsafeUnpin for file_acl::text::Spelling
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::text::Spelling
+impl core::panic::unwind_safe::UnwindSafe for file_acl::text::Spelling
+pub fn file_acl::text::parse(&[u8]) -> core::result::Result<core::option::Option<file_acl::text::Parsed>, file_acl::text::ParseError>
+pub fn file_acl::text::write(&file_acl::Acl, file_acl::text::Spelling) -> alloc::vec::Vec<u8>
+pub fn file_acl::text::write_named<U: core::convert::AsRef<[u8]>, G: core::convert::AsRef<[u8]>>(&file_acl::Acl, file_acl::text::Spelling, impl core::ops::function::FnMut(u32) -> core::option::Option<U>, impl core::ops::function::FnMut(u32) -> core::option::Option<G>) -> alloc::vec::Vec<u8>
+pub mod file_acl::xattr
+#[non_exhaustive] pub enum file_acl::xattr::DecodeError
+pub file_acl::xattr::DecodeError::Invalid(file_acl::Invalid)
+pub file_acl::xattr::DecodeError::Partial
+pub file_acl::xattr::DecodeError::Partial::len: usize
+pub file_acl::xattr::DecodeError::StrayPerm
+pub file_acl::xattr::DecodeError::StrayPerm::bits: u16
+pub file_acl::xattr::DecodeError::StrayPerm::entry: usize
+pub file_acl::xattr::DecodeError::TagOrder
+pub file_acl::xattr::DecodeError::TagOrder::entry: usize
+pub file_acl::xattr::DecodeError::TagOrder::previous: file_acl::Tag
+pub file_acl::xattr::DecodeError::TagOrder::tag: file_acl::Tag
+pub file_acl::xattr::DecodeError::TooLong
+pub file_acl::xattr::DecodeError::TooLong::len: usize
+pub file_acl::xattr::DecodeError::UnknownTag
+pub file_acl::xattr::DecodeError::UnknownTag::entry: usize
+pub file_acl::xattr::DecodeError::UnknownTag::raw: u16
+pub file_acl::xattr::DecodeError::UnmappedId
+pub file_acl::xattr::DecodeError::UnmappedId::entry: usize
+pub file_acl::xattr::DecodeError::UnmappedId::tag: file_acl::Tag
+pub file_acl::xattr::DecodeError::Version
+pub file_acl::xattr::DecodeError::Version::version: u32
+impl core::convert::From<file_acl::Invalid> for file_acl::xattr::DecodeError
+pub fn file_acl::xattr::DecodeError::from(file_acl::Invalid) -> file_acl::xattr::DecodeError
+impl core::error::Error for file_acl::xattr::DecodeError
+impl core::fmt::Display for file_acl::xattr::DecodeError
+pub fn file_acl::xattr::DecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::xattr::DecodeError
+impl core::marker::Send for file_acl::xattr::DecodeError
+impl core::marker::Sync for file_acl::xattr::DecodeError
+impl core::marker::Unpin for file_acl::xattr::DecodeError
+impl core::marker::UnsafeUnpin for file_acl::xattr::DecodeError
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::xattr::DecodeError
+impl core::panic::unwind_safe::UnwindSafe for file_acl::xattr::DecodeError
+pub const file_acl::xattr::ACCESS: &str
+pub const file_acl::xattr::DEFAULT: &str
+pub fn file_acl::xattr::decode(&[u8]) -> core::result::Result<core::option::Option<file_acl::Acl>, file_acl::xattr::DecodeError>
+pub fn file_acl::xattr::encode(&file_acl::Acl) -> alloc::vec::Vec<u8>
+#[non_exhaustive] pub enum file_acl::Invalid
+pub file_acl::Invalid::Missing
+pub file_acl::Invalid::Missing::tag: file_acl::Tag
+pub file_acl::Invalid::Repeated
+pub file_acl::Invalid::Repeated::qualifier: file_acl::Qualifier
+pub file_acl::Invalid::UndefinedId
+pub file_acl::Invalid::UndefinedId::tag: file_acl::Tag
+impl core::convert::From<file_acl::Invalid> for file_acl::MapError
+pub fn file_acl::MapError::from(file_acl::Invalid) -> file_acl::MapError
+impl core::convert::From<file_acl::Invalid> for file_acl::text::ResolveError
+pub fn file_acl::text::ResolveError::from(file_acl::Invalid) -> file_acl::text::ResolveError
+impl core::convert::From<file_acl::Invalid> for file_acl::xattr::DecodeError
+pub fn file_acl::xattr::DecodeError::from(file_acl::Invalid) -> file_acl::xattr::DecodeError
+impl core::error::Error for file_acl::Invalid
+impl core::fmt::Display for file_acl::Invalid
+pub fn file_acl::Invalid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::Invalid
+impl core::marker::Send for file_acl::Invalid
+impl core::marker::Sync for file_acl::Invalid
+impl core::marker::Unpin for file_acl::Invalid
+impl core::marker::UnsafeUnpin for file_acl::Invalid
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Invalid
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Invalid
+#[non_exhaustive] pub enum file_acl::MapError
+pub file_acl::MapError::Invalid(file_acl::Invalid)
+pub file_acl::MapError::Unmapped
+pub file_acl::MapError::Unmapped::id: u32
+pub file_acl::MapError::Unmapped::tag: file_acl::Tag
+impl core::convert::From<file_acl::Invalid> for file_acl::MapError
+pub fn file_acl::MapError::from(file_acl::Invalid) -> file_acl::MapError
+impl core::error::Error for file_acl::MapError
+impl core::fmt::Display for file_acl::MapError
+pub fn file_acl::MapError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::MapError
+impl core::marker::Send for file_acl::MapError
+impl core::marker::Sync for file_acl::MapError
+impl core::marker::Unpin for file_acl::MapError
+impl core::marker::UnsafeUnpin for file_acl::MapError
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::MapError
+impl core::panic::unwind_safe::UnwindSafe for file_acl::MapError
+pub enum file_acl::Qualifier
+pub file_acl::Qualifier::Group(u32)
+pub file_acl::Qualifier::GroupObj
+pub file_acl::Qualifier::Mask
+pub file_acl::Qualifier::Other
+pub file_acl::Qualifier::User(u32)
+pub file_acl::Qualifier::UserObj
+impl file_acl::Qualifier
+pub const fn file_acl::Qualifier::id(self) -> core::option::Option<u32>
+pub const fn file_acl::Qualifier::new(file_acl::Tag, u32) -> file_acl::Qualifier
+pub const fn file_acl::Qualifier::tag(self) -> file_acl::Tag
+impl core::fmt::Display for file_acl::Qualifier
+pub fn file_acl::Qualifier::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::Qualifier
+impl core::marker::Send for file_acl::Qualifier
+impl core::marker::Sync for file_acl::Qualifier
+impl core::marker::Unpin for file_acl::Qualifier
+impl core::marker::UnsafeUnpin for file_acl::Qualifier
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Qualifier
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Qualifier
+pub enum file_acl::Tag
+pub file_acl::Tag::Group
+pub file_acl::Tag::GroupObj
+pub file_acl::Tag::Mask
+pub file_acl::Tag::Other
+pub file_acl::Tag::User
+pub file_acl::Tag::UserObj
+impl file_acl::Tag
+pub const fn file_acl::Tag::from_raw(u16) -> core::option::Option<file_acl::Tag>
+pub const fn file_acl::Tag::is_named(self) -> bool
+pub const fn file_acl::Tag::to_raw(self) -> u16
+impl core::fmt::Display for file_acl::Tag
+pub fn file_acl::Tag::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for file_acl::Tag
+impl core::marker::Send for file_acl::Tag
+impl core::marker::Sync for file_acl::Tag
+impl core::marker::Unpin for file_acl::Tag
+impl core::marker::UnsafeUnpin for file_acl::Tag
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Tag
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Tag
+pub struct file_acl::Acl
+impl file_acl::Acl
+pub fn file_acl::Acl::entries(&self) -> &[file_acl::Entry]
+pub fn file_acl::Acl::into_entries(self) -> alloc::vec::Vec<file_acl::Entry>
+pub fn file_acl::Acl::mask(&self) -> core::option::Option<file_acl::Perm>
+pub fn file_acl::Acl::names_anyone(&self) -> bool
+pub fn file_acl::Acl::new(alloc::vec::Vec<file_acl::Entry>) -> core::result::Result<file_acl::Acl, file_acl::Invalid>
+pub fn file_acl::Acl::other(&self) -> file_acl::Perm
+pub fn file_acl::Acl::owner(&self) -> file_acl::Perm
+pub fn file_acl::Acl::owning_group(&self) -> file_acl::Perm
+pub fn file_acl::Acl::perm(&self, file_acl::Qualifier) -> core::option::Option<file_acl::Perm>
+impl file_acl::Acl
+pub fn file_acl::Acl::from_mode(u32) -> file_acl::Acl
+pub fn file_acl::Acl::is_minimal(&self) -> bool
+pub fn file_acl::Acl::mode_bits(&self) -> u32
+pub fn file_acl::Acl::narrowed(&self) -> file_acl::Acl
+pub fn file_acl::Acl::with_computed_mask(alloc::vec::Vec<file_acl::Entry>) -> core::result::Result<file_acl::Acl, file_acl::Invalid>
+pub fn file_acl::Acl::with_mode(&self, u32) -> file_acl::Acl
+impl file_acl::Acl
+pub fn file_acl::Acl::map_ids(&self, impl core::ops::function::FnMut(u32) -> core::option::Option<u32>, impl core::ops::function::FnMut(u32) -> core::option::Option<u32>) -> core::result::Result<file_acl::Acl, file_acl::MapError>
+pub fn file_acl::Acl::map_ids_partial(&self, impl core::ops::function::FnMut(u32) -> core::option::Option<u32>, impl core::ops::function::FnMut(u32) -> core::option::Option<u32>) -> core::result::Result<file_acl::Partial, file_acl::Invalid>
+impl core::marker::Freeze for file_acl::Acl
+impl core::marker::Send for file_acl::Acl
+impl core::marker::Sync for file_acl::Acl
+impl core::marker::Unpin for file_acl::Acl
+impl core::marker::UnsafeUnpin for file_acl::Acl
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Acl
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Acl
+pub struct file_acl::Entry
+pub file_acl::Entry::perm: file_acl::Perm
+pub file_acl::Entry::qualifier: file_acl::Qualifier
+impl file_acl::Entry
+pub const fn file_acl::Entry::new(file_acl::Qualifier, file_acl::Perm) -> file_acl::Entry
+impl core::marker::Freeze for file_acl::Entry
+impl core::marker::Send for file_acl::Entry
+impl core::marker::Sync for file_acl::Entry
+impl core::marker::Unpin for file_acl::Entry
+impl core::marker::UnsafeUnpin for file_acl::Entry
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Entry
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Entry
+#[non_exhaustive] pub struct file_acl::Partial
+pub file_acl::Partial::left_out: usize
+pub file_acl::Partial::list: file_acl::Acl
+impl core::marker::Freeze for file_acl::Partial
+impl core::marker::Send for file_acl::Partial
+impl core::marker::Sync for file_acl::Partial
+impl core::marker::Unpin for file_acl::Partial
+impl core::marker::UnsafeUnpin for file_acl::Partial
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Partial
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Partial
+pub struct file_acl::Perm(_)
+impl file_acl::Perm
+pub const file_acl::Perm::ALL: file_acl::Perm
+pub const file_acl::Perm::EXECUTE: file_acl::Perm
+pub const file_acl::Perm::NONE: file_acl::Perm
+pub const file_acl::Perm::READ: file_acl::Perm
+pub const file_acl::Perm::WRITE: file_acl::Perm
+pub const fn file_acl::Perm::bits(self) -> u16
+pub const fn file_acl::Perm::contains(self, file_acl::Perm) -> bool
+pub const fn file_acl::Perm::from_bits(u16) -> core::option::Option<file_acl::Perm>
+pub const fn file_acl::Perm::intersection(self, file_acl::Perm) -> file_acl::Perm
+pub const fn file_acl::Perm::union(self, file_acl::Perm) -> file_acl::Perm
+impl core::fmt::Debug for file_acl::Perm
+pub fn file_acl::Perm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for file_acl::Perm
+pub fn file_acl::Perm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::bit::BitAnd for file_acl::Perm
+pub type file_acl::Perm::Output = file_acl::Perm
+pub fn file_acl::Perm::bitand(self, file_acl::Perm) -> file_acl::Perm
+impl core::ops::bit::BitAndAssign for file_acl::Perm
+pub fn file_acl::Perm::bitand_assign(&mut self, file_acl::Perm)
+impl core::ops::bit::BitOr for file_acl::Perm
+pub type file_acl::Perm::Output = file_acl::Perm
+pub fn file_acl::Perm::bitor(self, file_acl::Perm) -> file_acl::Perm
+impl core::ops::bit::BitOrAssign for file_acl::Perm
+pub fn file_acl::Perm::bitor_assign(&mut self, file_acl::Perm)
+impl core::marker::Freeze for file_acl::Perm
+impl core::marker::Send for file_acl::Perm
+impl core::marker::Sync for file_acl::Perm
+impl core::marker::Unpin for file_acl::Perm
+impl core::marker::UnsafeUnpin for file_acl::Perm
+impl core::panic::unwind_safe::RefUnwindSafe for file_acl::Perm
+impl core::panic::unwind_safe::UnwindSafe for file_acl::Perm
+pub const file_acl::UNDEFINED_ID: u32

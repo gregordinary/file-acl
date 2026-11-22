@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Started by hand against a chosen ref. A push event is delivered once and is
+  # not redelivered, so a commit whose delivery was dropped otherwise has no way
+  # to be checked short of pushing another commit to trigger one.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format, lint, test, docs
+    runs-on: ubuntu-latest
+    # Two builds and test runs, one under qemu-user, and three apt installs.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned)
+        # rust-toolchain.toml pins the toolchain, its components, and the
+        # no_std target, so fmt, clippy, and the builds all run under the same
+        # rustfmt everywhere. With no toolchain named, `rustup toolchain
+        # install` installs the one the file names.
+        run: rustup toolchain install
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        # The panic-freedom lints in src/lib.rs are denied outright; -D warnings
+        # adds everything else clippy warns about.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Lift the user-namespace restriction
+        # Ubuntu 23.10 and later restrict unprivileged user namespaces through
+        # AppArmor; the comparison tests enter one to read lists as a process
+        # in a namespace does. The sysctl is absent on other hosts, which is
+        # fine.
+        run: sudo sysctl --ignore --write kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Give the user subordinate ids
+        # The tmpfs comparisons mount one in user and mount namespaces of their
+        # own, which map the user's subordinate ids (/etc/subuid, /etc/subgid)
+        # through newuidmap and newgidmap, so a list there can name more than
+        # one id; the id mapping comparisons map 53 of them out of order. This
+        # adds whichever the runner image lacks, and changes nothing where it
+        # has them.
+        run: |
+          command -v newuidmap > /dev/null || { sudo apt-get update && sudo apt-get install --yes uidmap; }
+          user="$(id --user --name)"
+          grep --quiet "^$user:" /etc/subuid || sudo usermod --add-subuids 100000-165535 "$user"
+          grep --quiet "^$user:" /etc/subgid || sudo usermod --add-subgids 100000-165535 "$user"
+      - name: Install bsdtar
+        # Ubuntu's libarchive is built with access control lists, so its
+        # bsdtar applies the lists the tar comparisons extract.
+        run: sudo apt-get update && sudo apt-get install --yes libarchive-tools
+      - name: Test, every reference required
+        # Each variable turns a missing reference from a skip into a failure,
+        # so a green run is one in which every comparison ran. The runner image
+        # carries Python, libacl and GNU tar, and its filesystem holds POSIX
+        # access control lists.
+        run: cargo test --workspace --all-features
+        env:
+          FILE_ACL_REQUIRE_KERNEL: '1'
+          FILE_ACL_REQUIRE_LIBACL: '1'
+          FILE_ACL_REQUIRE_USERNS: '1'
+          FILE_ACL_REQUIRE_TMPFS: '1'
+          FILE_ACL_REQUIRE_GNU_TAR: '1'
+          FILE_ACL_REQUIRE_ID_MAP: '1'
+          FILE_ACL_REQUIRE_BSDTAR: '1'
+      - name: Install a big-endian target, its linker and an emulator
+        run: |
+          rustup target add s390x-unknown-linux-gnu
+          sudo apt-get update && sudo apt-get install --yes gcc-s390x-linux-gnu libc6-dev-s390x-cross qemu-user
+      - name: Test on a big-endian target, every reference required
+        # The binary form is little-endian on every host. s390x is big-endian,
+        # so a value read or written in the host's byte order fails here where
+        # it passes above. The tests and doctests are built for s390x and run
+        # by qemu-user, which passes their system calls to this runner's
+        # kernel: the comparisons run as above, with the crate on a big-endian
+        # host.
+        run: cargo test --workspace --all-features --target s390x-unknown-linux-gnu
+        env:
+          CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_LINKER: s390x-linux-gnu-gcc
+          CARGO_TARGET_S390X_UNKNOWN_LINUX_GNU_RUNNER: qemu-s390x -L /usr/s390x-linux-gnu
+          FILE_ACL_REQUIRE_KERNEL: '1'
+          FILE_ACL_REQUIRE_LIBACL: '1'
+          FILE_ACL_REQUIRE_USERNS: '1'
+          FILE_ACL_REQUIRE_TMPFS: '1'
+          FILE_ACL_REQUIRE_GNU_TAR: '1'
+          FILE_ACL_REQUIRE_ID_MAP: '1'
+          FILE_ACL_REQUIRE_BSDTAR: '1'
+      - name: Documentation (warning-clean)
+        run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Build for a target with no standard library
+        # The library is no_std with alloc. A target that has no `std` at all
+        # is what shows it: a stray use of `std` fails to build here, where on
+        # a hosted target it would compile.
+        run: cargo build --lib --target thumbv7em-none-eabihf
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (MSRV)
+        # The `+1.88` override wins over the pinned toolchain, which sits ahead
+        # of the floor, so this checks the version `rust-version` promises
+        # rather than the one contributors use.
+        run: rustup toolchain install 1.88 --profile minimal
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Check
+        # Warnings are errors here too. Some arise only at the floor: an
+        # `expect` that a later compiler fulfills can go unfulfilled.
+        run: cargo +1.88 check --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -D warnings
+
+  deny:
+    name: License and advisory policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check dependency licenses and advisories
+        # deny.toml pins the permitted licenses, the advisory policy, and the
+        # registries a dependency may come from, dev-dependencies included.
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check licenses advisories sources
+      - name: Check the fuzzing harness's dependencies
+        # The harness is a workspace of its own, and holds the only
+        # third-party crates; the same deny.toml applies.
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          manifest-path: fuzz/Cargo.toml
+          command: check licenses advisories sources
+
+  fuzz:
+    name: Fuzz targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # cargo-fuzz needs a nightly compiler for its sanitizer flags. Pinned, so
+      # this job fails on a change to the targets rather than on a nightly's
+      # regression, and bumped deliberately.
+      FUZZ_NIGHTLY: nightly-2026-07-09
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned nightly) and cargo-fuzz
+        run: |
+          rustup toolchain install "$FUZZ_NIGHTLY" --profile minimal
+          cargo install cargo-fuzz --version 0.13.2 --locked
+      - name: Build every target
+        # What this catches is a target left behind by a change to the API it
+        # drives.
+        working-directory: fuzz
+        run: cargo "+$FUZZ_NIGHTLY" fuzz build
+      - name: Smoke run
+        # Each target from an empty corpus, for a fixed number of runs from a
+        # fixed seed, so a failure here reproduces with the same command. It
+        # catches a property a change breaks on inputs found in seconds;
+        # longer runs are made by hand (CONTRIBUTING.md).
+        working-directory: fuzz
+        run: |
+          for target in $(cargo "+$FUZZ_NIGHTLY" fuzz list); do
+            cargo "+$FUZZ_NIGHTLY" fuzz run "$target" -- -runs=300000 -seed=1 -max_len=4096
+          done
+
+  api:
+    name: Public API surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # cargo-public-api reads rustdoc's JSON output, whose rendering of paths
+      # changes between nightlies, so a floating nightly would fail this job on
+      # rustdoc drift rather than on an API change. Pinned, and bumped
+      # deliberately: a bump regenerates the snapshot, and that diff is
+      # reviewed like any other.
+      RUSTDOC_JSON_NIGHTLY: nightly-2026-07-09
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust (pinned, plus the pinned nightly for rustdoc JSON)
+        run: |
+          rustup toolchain install
+          rustup toolchain install "$RUSTDOC_JSON_NIGHTLY" --profile minimal
+      - name: Install cargo-public-api
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-public-api@0.52.0
+      - name: Regenerate the snapshot
+        # Auto-trait impls are kept, so a type that gains or loses Send or Sync
+        # shows up in review. Blanket and auto-derived impls are omitted as
+        # noise.
+        run: |
+          RUSTUP_TOOLCHAIN="$RUSTDOC_JSON_NIGHTLY" cargo public-api -p file-acl --all-features \
+            --omit blanket-impls,auto-derived-impls > public-api.txt
+      - name: Fail on an unreviewed surface change
+        # The snapshot is committed, so any change to the public API arrives as
+        # a reviewable diff rather than passing unnoticed. Regenerate it with
+        # the command above and commit the result.
+        run: git diff --exit-code -- public-api.txt

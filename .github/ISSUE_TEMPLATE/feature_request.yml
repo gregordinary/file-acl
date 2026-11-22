@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose something file-acl does not do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do with a list, and where file-acl stops you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: >
+        An API, a form of list file-acl does not read or write, a tool whose
+        spelling it does not follow: whatever shape you imagine. A sketch is
+        enough; the shape is discussable.
+  - type: textarea
+    id: material
+    attributes:
+      label: Where it is needed
+      description: >
+        The tools, archives or systems that need it, and what they do with
+        such a list.
