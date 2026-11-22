@@ -5,12 +5,12 @@ use alloc::vec::Vec;
 use core::fmt::{self, Write as _};
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
-/// The id an entry carries where it names no particular user or group
+/// The id an entry has where it names no particular user or group
 /// (`ACL_UNDEFINED_ID`).
 ///
 /// The binary form writes it in the id field of the owner, owning group, mask
-/// and other entries. A named entry never carries it: the kernel refuses such
-/// a list. A process in a user namespace reads it as the id of a named entry
+/// and other entries. A named entry never has it: the kernel refuses such a
+/// list. A process in a user namespace reads it as the id of a named entry
 /// whose id its namespace does not map.
 pub const UNDEFINED_ID: u32 = u32::MAX;
 
@@ -292,15 +292,17 @@ impl Entry {
 /// A POSIX.1e access control list, valid and in canonical order.
 ///
 /// A list is valid when the kernel accepts it and libacl's checker
-/// (`acl_check`) passes it: it holds exactly one owner, owning group and
-/// other entry, at most one mask, a mask wherever it names a user or group,
-/// no user or group named twice, and no named entry carrying
-/// [`UNDEFINED_ID`]. Its entries are held in the order the kernel requires
-/// and libacl writes: the owner, named users by ascending id, the owning
-/// group, named groups by ascending id, the mask, other.
+/// (`acl_check`) passes it. A valid list holds exactly one owner, owning
+/// group and other entry, and at most one mask. It has a mask wherever it
+/// names a user or group. It names no user or group twice, and no named
+/// entry has [`UNDEFINED_ID`] as its id.
 ///
-/// The kernel stores a list naming the same user twice; this one is refused,
-/// as libacl's checker refuses it and no tool writes one.
+/// A list holds its entries in the order the kernel requires and libacl
+/// writes. The order is the owner, named users by ascending id, the owning
+/// group, named groups by ascending id, the mask, then other.
+///
+/// An `Acl` cannot name the same user twice, though the kernel stores such a
+/// list: libacl's checker refuses it, and no tool writes one.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Acl {
     entries: Vec<Entry>,
@@ -315,10 +317,13 @@ impl Acl {
     ///
     /// # Errors
     ///
-    /// [`Invalid`] naming the first rule the entries break: the first entry,
-    /// in canonical order, that repeats another or names the undefined id,
-    /// and otherwise the first required entry missing (owner, owning group,
-    /// other, then the mask a named entry requires).
+    /// [`Invalid`] naming the first rule the entries break, found in this
+    /// order:
+    ///
+    /// - The first entry, in canonical order, that repeats another or names
+    ///   the undefined id.
+    /// - The first required entry missing: the owner's, the owning group's,
+    ///   other's, then the mask a named entry requires.
     pub fn new(mut entries: Vec<Entry>) -> Result<Acl, Invalid> {
         entries.sort_unstable_by_key(|entry| entry.qualifier);
         let mut owner = None;
@@ -383,7 +388,7 @@ impl Acl {
 
     /// This list with its owner's, owning group's, mask's and other's
     /// entries granting these instead, its named entries as they are. It
-    /// stays valid, since no entry's qualifier changes; `mask` is ignored
+    /// stays valid, since no entry's qualifier changes. `mask` is ignored
     /// where the list has none.
     pub(crate) fn with_object_perms(
         &self,
@@ -486,7 +491,7 @@ pub enum Invalid {
         /// Whom both entries are for.
         qualifier: Qualifier,
     },
-    /// A named entry carries [`UNDEFINED_ID`], which names no one.
+    /// A named entry's id is [`UNDEFINED_ID`], which names no one.
     UndefinedId {
         /// [`Tag::User`] or [`Tag::Group`].
         tag: Tag,

@@ -1,16 +1,20 @@
 //! The rules that tie a list to a file's mode, as the kernel keeps them.
 //!
 //! A file's access list and its mode are two views of one set of
-//! permissions. The kernel keeps them in step: setting an access list sets the
-//! mode's permission bits from it, and `chmod` sets the list's entries from
-//! the mode. An access list that says no more than a mode does, the
-//! [minimal](Acl::is_minimal) one, is not stored at all. [`set`] applies
-//! these rules for a caller with no kernel to ask, such as a program writing
-//! a filesystem image, so that what it writes is what the kernel would have
-//! left. The methods on [`Acl`] this module adds are the parts it is made of.
+//! permissions, and the kernel keeps them in step. Setting an access list sets
+//! the mode's permission bits from it, and `chmod` sets the list's entries
+//! from the mode. An access list that says no more than a mode does, the
+//! [minimal] one, is not stored at all.
+//!
+//! [`set`] applies these rules for a caller with no kernel to ask, such as a
+//! program writing a filesystem image. The program then writes what the
+//! kernel would have left. The methods on [`Acl`] this module adds are the
+//! parts it is made of.
 //!
 //! A file's default list, which a directory's new entries inherit, has no
 //! bearing on its mode.
+//!
+//! [minimal]: Acl::is_minimal
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -55,14 +59,13 @@ fn bits_of(perm: Perm, class: Class) -> u32 {
 }
 
 impl Acl {
-    /// The permission bits of the mode a file carrying this access list
-    /// shows: the owner's from its owner entry, the group's from its mask,
-    /// or from its owning group's entry where it has no mask, and other's
-    /// from its other entry.
+    /// The permission bits of the mode a file with this access list shows.
     ///
-    /// This is what the kernel sets a file's permission bits to when the
-    /// list is set as its access list, and what `stat` reports while the
-    /// list stands.
+    /// The owner's bits come from the owner entry, and other's from the other
+    /// entry. The group's come from the mask, or from the owning group's entry
+    /// where the list has no mask. The kernel sets a file's permission bits to
+    /// these when the list is set as its access list. `stat` reports them
+    /// while the list stands.
     ///
     /// ```
     /// use file_acl::{Acl, Entry, Perm, Qualifier};
@@ -85,12 +88,12 @@ impl Acl {
             | bits_of(self.other(), OTHER)
     }
 
-    /// Whether the list says no more than a mode does: it holds the owner's,
-    /// the owning group's and other's entries, and no mask and no named
-    /// entry.
+    /// Whether the list says no more than a mode does. A minimal list holds
+    /// the owner's, the owning group's and other's entries, with no mask and
+    /// no named entry.
     ///
     /// Set as an access list, a minimal list is not stored: the kernel sets
-    /// the mode from it and removes any list the file held. A list with a
+    /// the mode from it and removes any list the file had. A list with a
     /// mask is not minimal, even naming no one, and is stored.
     #[must_use]
     pub fn is_minimal(&self) -> bool {
@@ -118,9 +121,10 @@ impl Acl {
         )
     }
 
-    /// The access list after `chmod` sets a file's mode to `mode`: the
-    /// owner's, the mask's and other's entries grant what `mode`'s
-    /// permission bits grant each class, and the named entries and the owning
+    /// The access list after `chmod` sets a file's mode to `mode`.
+    ///
+    /// The owner's, the mask's and other's entries grant what `mode`'s
+    /// permission bits grant each class. The named entries and the owning
     /// group's are as they were. In a list with no mask, the owning group's
     /// entry takes the group bits. Bits of `mode` above the permission bits
     /// are ignored.
@@ -160,23 +164,23 @@ impl Acl {
     }
 
     /// The minimal list granting the owner, and anyone this list does not
-    /// name, what this list grants them: its owner's and other's entries as
-    /// they are, and its owning group's cut back by the mask.
+    /// name, what this list grants them. It keeps the owner's and other's
+    /// entries as they are, and the owning group's cut back by the mask.
     ///
-    /// It is for a file that cannot carry the list, as on a filesystem that
-    /// holds no lists. The list's mode bits alone would not do: where the
-    /// list has a mask, the group bits are the mask's, so a list granting the
-    /// owning group `---` beside a mask of `rw-` would give that group `rw-`.
+    /// It is for a file that cannot have the list, as on a filesystem that
+    /// stores no lists. The list's mode bits alone would not do. Where the
+    /// list has a mask, the group bits are the mask's. A list granting the
+    /// owning group `---` beside a mask of `rw-` would then give that group
+    /// `rw-`.
     /// Where an id or a name the list holds has no answer,
     /// [`Acl::map_ids_partial`] and
     /// [`Parsed::resolve_partial`](crate::text::Parsed::resolve_partial) keep
     /// everyone else's entries instead.
     ///
-    /// A user the list names, or a member of a group it names, is granted
-    /// under the narrowing what their class is granted: the owning group's
-    /// permissions, or other's. That can be less than the list granted them,
-    /// and also more: a list can deny one user what everyone else has, and a
-    /// mode cannot.
+    /// Under the narrowing, a named user, or a member of a named group, gets
+    /// their class's permissions: the owning group's, or other's. Their
+    /// class's permissions can be less than the list granted them, or more. A
+    /// list can deny one user what everyone else has, and a mode cannot.
     ///
     /// ```
     /// use file_acl::{Acl, Entry, Perm, Qualifier};
@@ -207,9 +211,9 @@ impl Acl {
     ///
     /// The computed mask replaces any mask the entries hold, and is added
     /// where they name a user or group and hold none. Entries naming no one
-    /// and holding no mask get none, as `setfacl` leaves them; libacl's
-    /// `acl_calc_mask` adds one to them too, which makes a list the kernel
-    /// stores of one it would not.
+    /// and holding no mask get none, as `setfacl` leaves them. libacl's
+    /// `acl_calc_mask` adds one to them too, so the kernel stores a list it
+    /// would otherwise not.
     ///
     /// ```
     /// use file_acl::{Acl, Entry, Perm, Qualifier};
@@ -228,8 +232,9 @@ impl Acl {
     /// # Errors
     ///
     /// [`Invalid`] where the entries make no valid list once the mask is
-    /// computed, as [`Acl::new`] names it: a required entry missing, or an
-    /// entry repeated (the mask among them) or naming the undefined id.
+    /// computed, as [`Acl::new`] names it. The rule broken is a required entry
+    /// missing, or an entry repeated (the mask among them) or naming the
+    /// undefined id.
     pub fn with_computed_mask(mut entries: Vec<Entry>) -> Result<Acl, Invalid> {
         let (mask, named) = computed_mask(
             entries
@@ -252,9 +257,9 @@ impl Acl {
     }
 }
 
-/// The mask `setfacl` computes for entries of these tags and permissions:
-/// the union of the owning group's and every named entry's, and whether any
-/// entry names a user or group.
+/// The mask `setfacl` computes for entries of these tags and permissions,
+/// and whether any entry names a user or group. The mask is the union of the
+/// owning group's and every named entry's permissions.
 pub(crate) fn computed_mask(entries: impl IntoIterator<Item = (Tag, Perm)>) -> (Perm, bool) {
     let mut mask = Perm::NONE;
     let mut named = false;
@@ -275,13 +280,13 @@ pub(crate) fn computed_mask(entries: impl IntoIterator<Item = (Tag, Perm)>) -> (
 /// of file apart.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FileKind {
-    /// A directory, which holds an access list and a default list.
+    /// A directory, which can have an access list and a default list.
     Directory,
-    /// A symbolic link, which holds neither.
+    /// A symbolic link, which can have neither.
     SymbolicLink,
-    /// Any other kind of file, a regular file, a FIFO, a socket or a
-    /// character device among them, which holds an access list and no
-    /// default list.
+    /// Any other kind of file, which can have an access list but no default
+    /// list. Regular files, FIFOs, sockets and character devices are among
+    /// them.
     Other,
 }
 
@@ -296,13 +301,13 @@ pub enum ListKind {
     Default,
 }
 
-/// What setting a list leaves: the file's mode, and the list it holds.
+/// What setting a list leaves: the file's mode, and the list it has.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Set {
     /// The file's mode.
     pub mode: u32,
-    /// The list the file holds, `None` where it holds none: the caller
-    /// stores it, and removes any it held where this is `None`.
+    /// The list the file has, `None` where it has none. The caller stores
+    /// it, and removes any the file had where this is `None`.
     pub list: Option<Acl>,
 }
 
@@ -310,8 +315,8 @@ pub struct Set {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum SetError {
-    /// A list of more than 8,191 entries, whose value is longer than the
-    /// 65,536 bytes the kernel takes for an extended attribute. The kernel
+    /// A list of more than 8,191 entries, whose value is
+    /// [longer than the kernel takes](crate::xattr#length). The kernel
     /// answers `E2BIG`, on any file, before any other refusal.
     TooLong,
     /// A default list on a file that is not a directory. The kernel answers
@@ -340,21 +345,21 @@ impl fmt::Display for SetError {
 impl core::error::Error for SetError {}
 
 /// What setting `list` as `kind` of list on a file of `file_kind` with mode
-/// `mode` leaves, as the kernel does it; `None` sets no list, as an empty
-/// attribute value or `removexattr` does.
+/// `mode` leaves, as the kernel does it. `None` sets no list, as an empty
+/// attribute value or `removexattr` does. Each case leaves the file as
+/// follows:
 ///
-/// - An access list sets the mode's permission bits to its
-///   [`mode_bits`](Acl::mode_bits), and is held unless it is
-///   [minimal](Acl::is_minimal). A minimal list leaves the file holding no
-///   access list, removing any it held.
-/// - A default list is held, minimal or not, and leaves the mode as it was.
-/// - No list leaves the file holding none, and the mode as it was. Where a
-///   list stood, the mode's group bits are still its mask's.
+/// - An access list sets the mode's permission bits to its [`mode_bits`],
+///   and is stored unless it is [minimal]. A minimal list leaves the file
+///   with no access list, removing any it had.
+/// - A default list is stored, minimal or not, and leaves the mode as it was.
+/// - No list leaves the file with none, and the mode as it was. Where a list
+///   stood, the mode's group bits are still its mask's.
 ///
 /// The bits of `mode` above the permission bits, set-user-ID, set-group-ID,
 /// sticky and any file type bits, are kept. The kernel keeps set-group-ID
-/// where the process setting the list is in the file's owning group or holds
-/// `CAP_FSETID`, and otherwise clears it, as `chmod` does. A caller setting
+/// where the process setting the list is in the file's owning group or has
+/// `CAP_FSETID`. Otherwise it clears it, as `chmod` does. A caller setting
 /// lists for a process outside the owning group and without `CAP_FSETID`
 /// clears set-group-ID itself.
 ///
@@ -382,16 +387,22 @@ impl core::error::Error for SetError {}
 ///
 /// # Errors
 ///
-/// [`SetError::TooLong`] for a list of more than 8,191 entries, on any file;
-/// otherwise [`SetError::NotADirectory`] for a default list on a file that is
-/// not a directory, and [`SetError::SymbolicLink`] for any list on a symbolic
-/// link. Setting no list fails on none of these: the kernel refuses even an
-/// empty value on a symbolic link, which leaves it holding no list, as `Ok`
-/// says.
+/// - [`SetError::TooLong`] for a list of more than 8,191 entries, on any
+///   file.
+/// - [`SetError::NotADirectory`] for a default list on a file that is not a
+///   directory.
+/// - [`SetError::SymbolicLink`] for any list on a symbolic link.
 ///
-/// A filesystem may refuse a shorter list, with `ENOSPC`, which `set` cannot
-/// know: ext4 with 4 KiB blocks refuses a list of a thousand entries, which
-/// tmpfs stores.
+/// The first is checked before the others. Setting no list fails on none of
+/// these. The kernel refuses even an empty value on a symbolic link, which
+/// leaves the link with no list, as `Ok` says.
+///
+/// A filesystem can also refuse a shorter list with `ENOSPC`, as
+/// [the binary form](crate::xattr#length) describes, which `set` cannot
+/// know.
+///
+/// [`mode_bits`]: Acl::mode_bits
+/// [minimal]: Acl::is_minimal
 pub fn set(
     mode: u32,
     file_kind: FileKind,

@@ -1,15 +1,15 @@
 //! The text form: a list as libacl's `acl_from_text` reads it,
-//! `getfacl --omit-header` prints it, and tar archives carry it in their
-//! `SCHILY.acl.access` and `SCHILY.acl.default` records.
+//! `getfacl --omit-header` prints it, and tar's `SCHILY.acl.access` and
+//! `SCHILY.acl.default` records hold it.
 //!
 //! A list's text is one entry per line or per comma: a tag, a qualifier and
 //! the permissions, separated by colons, as `user:1000:rw-` or `u:1000:rw`.
 //! The qualifier of a user or group entry names whom it is for, by id or by
-//! name; the owner's, owning group's, mask's and other's entries leave it
+//! name. The owner's, owning group's, mask's and other's entries leave it
 //! empty.
 //!
-//! Reading a text is two steps, since a name means different users to
-//! different systems: [`parse`] reads the text, names and all, and
+//! Reading a text takes two steps, since a name means different users to
+//! different systems. [`parse`] reads the text, names and all, and
 //! [`Parsed::resolve`] asks the caller what each name stands for. The crate
 //! reads no account database.
 //!
@@ -34,7 +34,7 @@
 //!
 //! The text form is libacl's (`acl_from_text`), which GNU tar reads its
 //! records with. [`parse`] reads a text where libacl reads it, and reads it
-//! as libacl does, but for the differences below.
+//! as libacl does, but for the differences below. The grammar they share:
 //!
 //! - Entries are separated by a comma or a line end (`\n`). Spaces, tabs and
 //!   carriage returns may come before an entry and after one, so lines may end
@@ -43,29 +43,30 @@
 //!   `o`, in lower case. The mask's and other's entries may leave out their
 //!   empty qualifier field: `mask:rwx` is `mask::rwx`.
 //! - The permissions are one to three of `r`, `w`, `x` and `-`, in any order,
-//!   each letter at most once: `rw-`, `wr`, `-` and `--x` are all read.
-//! - A qualifier of decimal digits is an id, never looked up as a name, and
-//!   one libacl does not read as a number is a name. libacl 2.4 looks a
+//!   with each of `r`, `w` and `x` at most once. `rw-`, `wr`, `-` and `--x`
+//!   are all read.
+//! - A qualifier of decimal digits is an id, never looked up as a name. A
+//!   qualifier libacl does not read as a number is a name. libacl 2.4 looks a
 //!   qualifier of digits past the last id (`4294967295` and more) up as a
-//!   name; [`parse`] reads `4294967295` as the undefined id, which
-//!   [`Parsed::resolve`] finds invalid, and refuses more, as below. A name
-//!   may hold any byte but a colon, a comma, a NUL, a line end and a carriage
-//!   return, and may not begin with `#`. In it, `\` and three octal digits
-//!   stand for the byte they give, and `\\` for one backslash; a backslash
-//!   before anything else is itself.
-//! - `#` begins a comment, which runs to the end of the line, wherever an
-//!   entry has ended: after its permissions (as `getfacl` writes
-//!   `#effective:` there), after the comma that ends it, or on a line of its
-//!   own. As libacl reads them, a comment before the first entry is refused,
-//!   at most one comment comes between two entries, and a comment that ends
-//!   its line is followed by another entry: `u::rw- #c` ends a text, and
-//!   `u::rw- #c\n` does not. So `getfacl`'s output is a list's text only
-//!   with `--omit-header`, which leaves out its `# file:` comments, and for
-//!   a directory with a default list, `--access`, which leaves out the
-//!   `default:` entries.
-//! - A user or group entry may hold a fourth field, the id of the user or
-//!   group its qualifier names, as star and libarchive write it
-//!   (`user:alice:rw-:1000`). On an entry naming an id, it must be that id.
+//!   name. [`parse`] reads `4294967295` as the undefined id, which
+//!   [`Parsed::resolve`] finds invalid, and refuses more, as below.
+//! - A name may hold any byte but a colon, a comma, a NUL, a line end and a
+//!   carriage return. It may not begin with `#`. In a name, `\` and three
+//!   octal digits stand for the byte they give, and `\\` for one backslash.
+//!   A backslash before anything else is itself.
+//! - `#` begins a comment, which runs to the end of the line. A comment
+//!   begins where an entry has ended: after its permissions, after the comma
+//!   that ends it, or on a line of its own. `getfacl` writes `#effective:`
+//!   after the permissions. As libacl reads comments, a comment before the
+//!   first entry is refused, and at most one comment comes between two
+//!   entries. A comment that ends its line is followed by another entry:
+//!   `u::rw- #c` ends a text, and `u::rw- #c\n` does not.
+//! - `getfacl`'s output is a list's text only with `--omit-header`, which
+//!   leaves out its `# file:` comments. For a directory with a default list,
+//!   it also needs `--access`, which leaves out the `default:` entries.
+//! - A user or group entry may hold a fourth field: the id of the user or
+//!   group its qualifier names (`user:alice:rw-:1000`). star and libarchive
+//!   write it. On an entry naming an id, it must be that id.
 //! - An empty text is no list: GNU tar writes an empty
 //!   `SCHILY.acl.default` record for a directory with no default list. A
 //!   text holding no entry but blanks or a comment is refused, as libacl
@@ -73,22 +74,24 @@
 //!
 //! Where libacl is loose, [`parse`] refuses what libacl reads:
 //!
-//! - A qualifier libacl reads as a number in another form than decimal
-//!   digits, as C's `strtoul` reads one: with a sign (`-1`, `+5`), in
-//!   hexadecimal (`0x10`), with a leading zero, which libacl reads as octal
-//!   (`010` is 8), or after leading whitespace; and a number past the range
-//!   of an id, which libacl 2.3 wraps (`4294967296` is 0) and libacl 2.4
-//!   looks up as a name.
-//! - An escape that gives a NUL, or a value past a byte (`\400`), which
-//!   libacl 2.3 reads as the end of the name; libacl 2.4 refuses `\000` and
+//! - A qualifier libacl reads as a number in a form other than decimal
+//!   digits. libacl reads it as C's `strtoul` does: signed (`-1`, `+5`),
+//!   hexadecimal (`0x10`), or octal after a leading zero (`010` is 8). It
+//!   also reads a number after leading whitespace.
+//! - A number past the range of an id, which libacl 2.3 wraps (`4294967296`
+//!   is 0) and libacl 2.4 looks up as a name.
+//! - An escape that gives a NUL, or a value past a byte (`\400`). libacl 2.3
+//!   reads either as the end of the name, and libacl 2.4 refuses `\000` and
 //!   `\400`.
 //! - Entries with no comma or line end between them (`u::rw- g::r--`, and
-//!   even `u::rw-g::r--`), and a comma that does not follow an entry on its
-//!   own line (`u::rw-\n,\ng::r--`).
+//!   even `u::rw-g::r--`).
+//! - A comma that does not follow an entry on its own line
+//!   (`u::rw-\n,\ng::r--`).
 //! - A tag not followed directly by its colon. libacl passes over blanks and
-//!   line ends after a tag (`u ::rw-`), and after a mask's or other's tag
-//!   over comments too; it reads their permissions with their colons, one,
-//!   or none, blanks around them (`m: :rwx`, `o r--`, even `orwx`).
+//!   line ends after a tag (`u ::rw-`), and over comments too after a mask's
+//!   or other's tag. It reads a mask's or other's permissions with two
+//!   colons, one or none, and blanks around them (`m: :rwx`, `o r--`, even
+//!   `orwx`).
 //! - A name beginning with a line end or a carriage return, which libacl
 //!   reads as part of the name (`group:\nstaff:r--` names the group
 //!   `\nstaff`). libacl refuses one later in a name, and so does [`parse`].
@@ -104,19 +107,23 @@
 //!
 //! # Other readers
 //!
-//! GNU tar reads its records with libacl, after dropping a fourth field; a
-//! name it cannot resolve costs the whole list. libarchive (bsdtar) reads the
-//! text with a reader of its own, which differs from libacl's: it decodes no
-//! escape, looking a name up as the text spells it, and takes the recorded id
-//! where the lookup has no answer; and it looks a qualifier of digits up as a
-//! name before reading it as an id. star reads a fourth field only in
-//! [`Spelling::STAR`]'s form (long tags, and commas with no blanks after
-//! them), taking the name where the reader's system has it and the id where it
-//! does not, and refuses a text holding a `#`, a comment's included. So a name
-//! that needs escaping is read by all three only in [`Spelling::STAR`], which
-//! records each name's id: GNU tar resolves the name, libarchive falls back on
-//! the id, and star does either. The tests extract text written in each
-//! spelling with GNU tar and bsdtar.
+//! GNU tar reads its records with libacl, after dropping a fourth field. A
+//! name it cannot resolve makes it drop the whole list.
+//!
+//! libarchive (bsdtar) reads the text with a reader of its own. It decodes no
+//! escape, and looks a name up as the text spells it. Where the lookup has no
+//! answer, it takes the recorded id. It looks a qualifier of digits up as a
+//! name before reading it as an id.
+//!
+//! star reads a fourth field only in [`Spelling::STAR`]'s form: long tags, and
+//! commas with no blanks after them. It takes the name where the reader's
+//! system has it, and the id where it does not. It refuses a text holding a
+//! `#`, a comment's included.
+//!
+//! A name that needs escaping is therefore read by all three only in
+//! [`Spelling::STAR`], which records each name's id. GNU tar resolves the
+//! name, libarchive falls back on the id, and star does either. The tests
+//! extract text written in each spelling with GNU tar and bsdtar.
 
 use alloc::string::ToString as _;
 use alloc::vec::Vec;
@@ -130,9 +137,9 @@ use crate::mode::computed_mask;
 /// text is empty.
 ///
 /// The text is read as the module's documentation describes. Its entries
-/// may come in any order, and the list it states is judged by
-/// [`Parsed::resolve`], once its names stand for ids: a text that parses
-/// may still state no valid list.
+/// may come in any order. [`Parsed::resolve`] judges the list it states once
+/// its names stand for ids, so a text that parses can still state no valid
+/// list.
 ///
 /// # Errors
 ///
@@ -222,7 +229,7 @@ impl Parsed {
     ///
     /// The lookups are asked in the order the text gives its entries, and no
     /// further once one has no answer. A name is passed as the text holds it,
-    /// its escapes decoded; an entry naming an id asks neither. Where an
+    /// its escapes decoded. An entry naming an id asks neither lookup. Where an
     /// entry holds both a name and, in a fourth field, an id, `prefer` says
     /// which it is given.
     ///
@@ -251,10 +258,10 @@ impl Parsed {
     ///
     /// # Errors
     ///
-    /// [`ResolveError::Unresolved`] naming the first name, in the text's
-    /// order, that has no answer and no recorded id to fall back on; and
-    /// [`ResolveError::Invalid`] where the entries make no valid list, as
-    /// [`Acl::new`] names it, once their names stand for ids.
+    /// - [`ResolveError::Unresolved`] naming the first name, in the text's
+    ///   order, that has no answer and no recorded id to fall back on.
+    /// - [`ResolveError::Invalid`] where the entries make no valid list once
+    ///   their names stand for ids, as [`Acl::new`] names it.
     pub fn resolve(
         &self,
         mut user: impl FnMut(&[u8]) -> Option<u32>,
@@ -276,7 +283,7 @@ impl Parsed {
 
     /// Whether an entry holds a name, which only a lookup can answer. A text
     /// naming everyone by id resolves without one, though the list it states
-    /// may name users and groups, as [`Acl::names_anyone`] says.
+    /// can name users and groups, as [`Acl::names_anyone`] says.
     ///
     /// ```
     /// use file_acl::text;
@@ -295,20 +302,22 @@ impl Parsed {
     }
 
     /// The list the text states, each name read through `user` or `group` as
-    /// [`resolve`](Self::resolve) reads it, and each entry naming someone
-    /// with no answer and no recorded id left out.
+    /// [`resolve`](Self::resolve) reads it. An entry whose name has no answer
+    /// and no recorded id is left out.
     ///
     /// Leaving an entry out takes nothing from anyone the lookups answer
-    /// for: each keeps what the list granted them, and the mask, which bounds
-    /// the owning group and every named entry, is kept. The entry left out
+    /// for. Each keeps what the list granted them. The mask, which bounds the
+    /// owning group and every named entry, is kept too. The entry left out
     /// granted or denied something to someone the caller's system has no
-    /// account for. [`narrowed`](Self::narrowed) is the answer for a list
-    /// that cannot be given at all, and gives a named user or group what
-    /// their class is granted, which can be more than the list granted them.
+    /// account for.
+    ///
+    /// Where the list cannot be given at all, [`narrowed`](Self::narrowed) is
+    /// the answer. It gives a named user or group what their class is
+    /// granted, which can be more than the list granted them.
     ///
     /// The lookups are asked about every name, in the text's order, save a
-    /// name with a recorded id under [`Prefer::Id`]. Whether two entries left
-    /// out name the same user is not judged, since neither stands for an id.
+    /// name with a recorded id under [`Prefer::Id`]. Two entries left out are
+    /// not judged for naming the same user, since neither stands for an id.
     ///
     /// ```
     /// use file_acl::text::{self, Prefer};
@@ -326,11 +335,10 @@ impl Parsed {
     ///
     /// # Errors
     ///
-    /// [`Invalid`] where the entries make no valid list: where the entries
-    /// naming no one break a rule whatever the named entries stand for, as
-    /// [`narrowed`](Self::narrowed) judges them, and otherwise where the
-    /// entries given make none once their names stand for ids, as
-    /// [`Acl::new`] names it.
+    /// [`Invalid`] where the entries make no valid list, naming the rule they
+    /// break. The entries naming no one are judged first, as
+    /// [`narrowed`](Self::narrowed) judges them. The entries kept are then
+    /// judged as [`Acl::new`] judges them, once their names stand for ids.
     pub fn resolve_partial(
         &self,
         mut user: impl FnMut(&[u8]) -> Option<u32>,
@@ -353,9 +361,11 @@ impl Parsed {
     }
 
     /// The text's entries with the mask `setfacl` computes, as
-    /// [`Acl::with_computed_mask`] computes it: the union of what the owning
-    /// group's entry and every named entry grant, replacing any mask the
-    /// text states, and added where it names someone and states none.
+    /// [`Acl::with_computed_mask`] computes it.
+    ///
+    /// The mask is the union of what the owning group's entry and every named
+    /// entry grant. It replaces any mask the text states, and is added where
+    /// the text names someone and states none.
     ///
     /// It needs no names, since a mask is computed from permissions alone.
     ///
@@ -389,12 +399,12 @@ impl Parsed {
         self
     }
 
-    /// The [narrowing](Acl::narrowed) of the list the text states, which
-    /// needs no names: the owner's and other's entries, and the owning
-    /// group's cut back by the mask.
+    /// The [narrowing] of the list the text states, which needs no names. It
+    /// keeps the owner's and other's entries, and the owning group's cut back
+    /// by the mask.
     ///
-    /// It is the list to give a file that cannot carry the list at all, as on
-    /// a filesystem that holds no lists. Where a name in the text has no
+    /// It is the list to give a file that cannot have the list at all, as on
+    /// a filesystem that stores no lists. Where a name in the text has no
     /// answer, [`resolve_partial`](Self::resolve_partial) keeps everyone
     /// else's entries instead.
     ///
@@ -410,17 +420,23 @@ impl Parsed {
     /// # Errors
     ///
     /// [`Invalid`] where the entries naming no one break a rule whatever the
-    /// named entries stand for: the owner's, owning group's or other's entry
-    /// missing or repeated, the mask repeated, or no mask beside a named
-    /// entry. Whether the named entries are valid among themselves depends on
-    /// whom their names stand for, and is not judged.
+    /// named entries stand for:
+    ///
+    /// - The owner's, owning group's or other's entry is missing or repeated.
+    /// - The mask is repeated.
+    /// - A named entry has no mask beside it.
+    ///
+    /// The named entries are not judged among themselves, since whether they
+    /// are valid depends on whom their names stand for.
+    ///
+    /// [narrowing]: Acl::narrowed
     pub fn narrowed(&self) -> Result<Acl, Invalid> {
         Ok(self.objects()?.narrowed())
     }
 
-    /// The entries naming no one, as a list, held to the rules they keep
-    /// whatever the named entries stand for: a mask wherever the text names
-    /// someone.
+    /// The entries naming no one, as a list, held to the rules that apply
+    /// whatever the named entries stand for. Those include a mask wherever the
+    /// text names someone.
     fn objects(&self) -> Result<Acl, Invalid> {
         let objects = self
             .entries
@@ -438,10 +454,13 @@ impl Parsed {
 }
 
 impl TextEntry {
-    /// The id the entry stands for: [`UNDEFINED_ID`] for an entry naming no
-    /// one, its id, or for a name the id `user` or `group` gives it or the
-    /// one recorded beside it, as `prefer` orders them. The name, for a name
-    /// with neither.
+    /// The id the entry stands for, or the name where it stands for none:
+    ///
+    /// - [`UNDEFINED_ID`] for an entry naming no one.
+    /// - Its id, for an entry naming an id.
+    /// - For a name, the id `user` or `group` gives it or the one recorded
+    ///   beside it, as `prefer` orders them.
+    /// - The name, for a name with neither.
     fn id(
         &self,
         user: &mut impl FnMut(&[u8]) -> Option<u32>,
@@ -489,9 +508,9 @@ pub enum ParseError {
     },
     /// The text, not empty, holds no entry: only blanks and line ends.
     NoEntry,
-    /// An entry does not begin with a tag and a colon: the tag is none of
-    /// the text form's, or is followed by anything but a colon, or the entry
-    /// is empty, as between two commas.
+    /// An entry does not begin with a tag and a colon. Its tag is none of the
+    /// text form's, or is followed by anything but a colon, or the entry is
+    /// empty, as between two commas.
     Tag {
         /// The offset the entry begins at.
         at: usize,
@@ -524,8 +543,8 @@ pub enum ParseError {
         /// The offset of the qualifier.
         at: usize,
     },
-    /// The permissions are not one to three of `r`, `w`, `x` and `-`, each
-    /// letter at most once.
+    /// The permissions are not one to three of `r`, `w`, `x` and `-`, with
+    /// each of `r`, `w` and `x` at most once.
     Perm {
         /// The offset of the permission field.
         at: usize,
@@ -534,8 +553,9 @@ pub enum ParseError {
     /// on an entry that names no one.
     ///
     /// A mask's or other's entry may leave out its empty qualifier field, so
-    /// the field after its tag's colon is its permissions: `mask:x:rwx` is
-    /// read as the permissions `x` and a fourth field `rwx`, and refused here.
+    /// the field after its tag's colon is its permissions. `mask:x:rwx` is
+    /// therefore read as the permissions `x` and a fourth field `rwx`, and
+    /// refused here.
     Id {
         /// The offset of the field.
         at: usize,
@@ -689,18 +709,21 @@ impl Spelling {
     /// followed by its id. Names are escaped as in
     /// [`GNU_TAR`](Self::GNU_TAR).
     ///
-    /// Text in this spelling is read as the list by star, which takes the
-    /// name where the reader's system has it and the id where it does not;
-    /// by GNU tar, which drops the id and resolves the name; and by
-    /// libarchive, which resolves the name and falls back on the id, where a
-    /// name has no answer or needs escaping. libacl refuses it, since it
-    /// reads no fourth field.
+    /// Text in this spelling is read as the list by three readers:
+    ///
+    /// - star takes the name where the reader's system has it, and the id
+    ///   where it does not.
+    /// - GNU tar drops the id and resolves the name.
+    /// - libarchive resolves the name, and falls back on the id where a name
+    ///   has no answer or needs escaping.
+    ///
+    /// libacl refuses it, since it reads no fourth field.
     ///
     /// It differs from what star and libarchive write themselves where that
     /// would not be read so. star records no id after a name it escapes, and
-    /// writes `#`, DEL and other control bytes as they are; libarchive
+    /// writes `#`, DEL and other control bytes as they are. libarchive
     /// escapes no name. Both write a name of digits as it is, which readers
-    /// take as an id; this spelling writes the id.
+    /// take as an id, where this spelling writes the id.
     ///
     /// ```
     /// use file_acl::text::{self, Prefer, Spelling};
@@ -779,28 +802,30 @@ pub fn write(acl: &Acl, spelling: Spelling) -> Vec<u8> {
 }
 
 /// The text of `acl` in `spelling`, each user and group named by the name
-/// `user` or `group` gives its id, and by its id where that has no answer.
+/// `user` or `group` gives its id. Where the lookup has no answer, the entry
+/// is written by id.
 ///
-/// This is how GNU tar names them: by name where the writing system has
-/// one. A name is written with each control byte, space, comma, colon and
-/// `#` escaped as `\` and three octal digits, and a backslash as `\\`, so
-/// that the text holds its entries apart; libacl escapes the same bytes but
-/// `#`, DEL and the control bytes other than tab, line end and carriage
-/// return. GNU tar drops what follows a `#` in its own records, so a name
-/// holding one is cut short in them, and not in this text.
+/// GNU tar names users and groups the same way, by name where the writing
+/// system has one. A name is written with each control byte, space, comma,
+/// colon and `#` escaped as `\` and three octal digits. A backslash is
+/// written as `\\`. The escapes keep the text's entries apart.
+///
+/// libacl escapes the same bytes but `#`, DEL and the control bytes other
+/// than tab, line end and carriage return. GNU tar drops what follows a `#`
+/// in its own records, so a name holding one is cut short there, and not in
+/// this text.
 ///
 /// Where `spelling` writes [`Names::WithIds`], each entry written by name is
 /// followed by its id.
 ///
-/// A name is not written, and the id is, where the text could not say it: a
-/// name that is empty, holds a NUL, or would be read as a number (`4242`,
-/// `0x10`), since an all-digit qualifier is read as an id before any name.
-/// The lookups are asked about the named entries in canonical order.
+/// The id is written in place of a name the text could not say. Such a name
+/// is empty, holds a NUL, or is one libacl would read as a number (`4242`,
+/// `0x10`). The lookups are asked about the named entries in canonical order.
 ///
 /// [`parse`] and [`Parsed::resolve`], with lookups that give each name its
-/// id, read the text back as `acl`. So does libacl, given the same account
-/// database, where `spelling` writes [`Names::Alone`]: it refuses a fourth
-/// field.
+/// id, read the text back as `acl`. libacl reads it back as `acl` too, given
+/// the same account database, where `spelling` writes [`Names::Alone`]. It
+/// refuses a fourth field.
 #[must_use]
 pub fn write_named<U: AsRef<[u8]>, G: AsRef<[u8]>>(
     acl: &Acl,
@@ -887,10 +912,11 @@ enum Reading {
 /// How libacl reads the qualifier `qualifier`, its escapes decoded.
 ///
 /// libacl reads a qualifier as a number where C's `strtoul`, in base 0,
-/// reads all of it: after optional whitespace and a sign, `0x` and
-/// hexadecimal digits, `0` and octal digits, or decimal digits (measured: `08`
-/// and `0x` are names, `010` is 8, `0x10` is 16, `+5` is 5 and ` 5` is 5).
-/// Only the first form, as plain decimal digits, is read as an id here.
+/// reads all of it. `strtoul` reads optional whitespace and a sign, then `0x`
+/// and hexadecimal digits, `0` and octal digits, or decimal digits.
+/// Measured: `08` and `0x` are names, `010` is 8, `0x10` is 16, `+5` is 5
+/// and ` 5` is 5. Only decimal digits with no whitespace, sign or leading
+/// zero, in the range of an id, are read as an id here.
 fn reading(qualifier: &[u8]) -> Reading {
     // C's `isspace`, which `strtoul` passes over first.
     let space = |byte: &u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r');
@@ -1086,12 +1112,12 @@ impl<'a> Cursor<'a> {
     }
 
     /// Reads what may follow an entry: blanks, and then a comma, a line end,
-    /// a comment or the end of the text; then any blanks and line ends, and
-    /// at most one comment.
+    /// a comment or the end of the text. After that come any blanks and line
+    /// ends, and at most one comment.
     ///
     /// A comment ending its line is followed by another entry, after blanks
-    /// and line ends: libacl refuses a second comment, or nothing but blanks
-    /// and line ends, after one.
+    /// and line ends. After such a comment, libacl refuses a second comment,
+    /// or nothing but blanks and line ends.
     fn end_of_entry(&mut self) -> Result<(), ParseError> {
         self.skip_blanks();
         match self.peek() {

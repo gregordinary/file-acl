@@ -2,11 +2,10 @@
 //! `system.posix_acl_default` extended attributes.
 //!
 //! A value is a 4-byte header holding the version, 2, and then one 8-byte
-//! record per entry: its tag ([`Tag::to_raw`]), its permissions
-//! ([`Perm::bits`]) and its id, as 16-, 16- and 32-bit little-endian
-//! integers. It is the form Linux's `getxattr` and `setxattr` give and take.
-//! The kernel takes an extended attribute's value of at most 65,536 bytes,
-//! and so a list of at most 8,191 entries.
+//! record per entry. A record holds the entry's tag ([`Tag::to_raw`]), its
+//! permissions ([`Perm::bits`]) and its id, as 16-, 16- and 32-bit
+//! little-endian integers. It is the form Linux's `getxattr` and `setxattr`
+//! give and take.
 //!
 //! ```
 //! use file_acl::{Perm, Qualifier, xattr};
@@ -24,6 +23,18 @@
 //! assert_eq!(xattr::encode(&acl), value);
 //! # Ok::<(), xattr::DecodeError>(())
 //! ```
+//!
+//! # Length
+//!
+//! The kernel takes an extended attribute's value of at most 65,536 bytes. A
+//! value therefore holds at most 8,191 entries: a 4-byte header and 8,191
+//! 8-byte records make 65,532 bytes. [`decode`] refuses a longer value, and
+//! [`mode::set`](crate::mode::set) a longer list, before anything else, as
+//! the kernel does.
+//!
+//! A filesystem can refuse a shorter list, with `ENOSPC`, which the crate
+//! cannot know. ext4 with 4 KiB blocks refuses a list of a thousand entries,
+//! which tmpfs stores.
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -57,34 +68,39 @@ pub(crate) const MAX_ENTRIES: usize = (MAX_LEN - HEADER) / ENTRY;
 /// The list `value` holds, or `None` where it holds none.
 ///
 /// `decode` accepts a value where the kernel accepts it from a process in the
-/// initial user namespace, with one exception: a value naming the same user
-/// or group twice, which the kernel stores and `decode` refuses, as libacl's
-/// checker refuses it and [`Acl`] does. From a process in another user
-/// namespace, the kernel also refuses a value naming an id that namespace
-/// does not map, which `decode` cannot know.
+/// initial user namespace, with one exception. The kernel stores a value
+/// naming the same user or group twice, and `decode` refuses it, as libacl's
+/// checker and [`Acl`] do. From another user namespace, the kernel also
+/// refuses a value naming an id that namespace does not map, which `decode`
+/// cannot know. It reads a value as follows:
 ///
-/// - A value longer than 65,536 bytes, a list of more than 8,191 entries, is
-///   refused before anything else, as the kernel refuses it. A filesystem may
-///   refuse a shorter one, with `ENOSPC`, which `decode` cannot know either:
-///   ext4 with 4 KiB blocks refuses a list of a thousand entries, which tmpfs
-///   stores.
+/// - A value [longer than the kernel takes](crate::xattr#length), a list of
+///   more than 8,191 entries, is refused before anything else, as the kernel
+///   refuses it.
 /// - An empty value, or a header alone, is `None`: the kernel takes either as
 ///   removing the list.
 /// - Named users, and named groups, may come in any order within their run,
 ///   as the kernel accepts them. The list returned holds them in canonical
-///   order, so [`encode`] may write them in another order than `value` did.
+///   order, so [`encode`] can write them in another order than `value` did.
 /// - The id fields of the owner, owning group, mask and other entries are
 ///   ignored, as the kernel ignores them.
 ///
 /// # Errors
 ///
-/// [`DecodeError`] naming the first rule `value` breaks: its length, if it is
-/// [`TooLong`]; its length, if it is shorter than a header; its version; its
-/// length again, if it does not end with a whole entry; then entry by entry,
-/// an [`UnknownTag`], [`StrayPerm`], [`TagOrder`] or [`UnmappedId`]; and last
-/// the list's own rules, as [`Acl::new`] names them. The kernel refuses the
-/// same values, but for a user or group named twice: a value too long with
-/// `E2BIG`, a wrong version with `EOPNOTSUPP`, every other with `EINVAL`.
+/// [`DecodeError`] naming the first rule `value` breaks, checked in this
+/// order:
+///
+/// 1. Its length, if it is [`TooLong`].
+/// 2. Its length, if it is shorter than a header.
+/// 3. Its version.
+/// 4. Its length again, if it does not end with a whole entry.
+/// 5. Entry by entry, an [`UnknownTag`], [`StrayPerm`], [`TagOrder`] or
+///    [`UnmappedId`].
+/// 6. The list's own rules, as [`Acl::new`] names them.
+///
+/// The kernel refuses the same values, but for a user or group named twice.
+/// It answers `E2BIG` for a value too long, `EOPNOTSUPP` for a wrong version,
+/// and `EINVAL` for every other.
 ///
 /// [`TooLong`]: DecodeError::TooLong
 /// [`UnknownTag`]: DecodeError::UnknownTag
@@ -151,12 +167,13 @@ pub fn decode(value: &[u8]) -> Result<Option<Acl>, DecodeError> {
 /// The value that holds `acl`.
 ///
 /// The entries are written in canonical order, and the owner, owning group,
-/// mask and other entries carry [`UNDEFINED_ID`], so the value is a function
-/// of the list alone and [`decode`] reads it back as `acl`. The kernel accepts
-/// the value and, where it stores it, reads it back byte for byte.
+/// mask and other entries have [`UNDEFINED_ID`] as their id. The value is
+/// therefore a function of the list alone, and [`decode`] reads it back as
+/// `acl`.
 ///
-/// That holds for a list of at most 8,191 entries. A longer list's value is
-/// longer than the kernel takes, and [`decode`] refuses it
+/// For a list of at most 8,191 entries, the kernel accepts the value and,
+/// where it stores it, reads it back byte for byte. A longer list's value is
+/// [longer than the kernel takes](crate::xattr#length). [`decode`] refuses it
 /// ([`DecodeError::TooLong`]), as [`mode::set`](crate::mode::set) refuses to
 /// set the list.
 #[must_use]
@@ -175,14 +192,15 @@ pub fn encode(acl: &Acl) -> Vec<u8> {
 
 /// Why a value holds no list: the rule it breaks.
 ///
-/// An entry is named by its position in the value, counting from 0; its
+/// An entry is named by its position in the value, counting from 0. Its
 /// record starts at byte `4 + 8 * entry`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum DecodeError {
-    /// The value is longer than 65,536 bytes, the most the kernel takes for
-    /// an extended attribute: a list of more than 8,191 entries. The kernel
-    /// refuses it with `E2BIG`, before any other check.
+    /// The value is longer than 65,536 bytes,
+    /// [the most the kernel takes](crate::xattr#length): a list of more than
+    /// 8,191 entries. The kernel refuses it with `E2BIG`, before any other
+    /// check.
     TooLong {
         /// The value's length, in bytes.
         len: usize,
@@ -225,13 +243,13 @@ pub enum DecodeError {
         /// The tag of the entry before it.
         previous: Tag,
     },
-    /// A named entry carries [`UNDEFINED_ID`].
+    /// A named entry has [`UNDEFINED_ID`] as its id.
     ///
-    /// This is what a process in a user namespace reads for a named entry
-    /// whose id its namespace does not map: the kernel reports the id as
+    /// A process in a user namespace reads this for a named entry whose id
+    /// its namespace does not map. The kernel reports the id as
     /// `UNDEFINED_ID`, not as the overflow id `stat` reports for an unmapped
     /// owner. The list cannot be set again as read, since the kernel refuses
-    /// a named entry carrying `UNDEFINED_ID`.
+    /// a named entry with `UNDEFINED_ID` as its id.
     UnmappedId {
         /// The entry's position in the value.
         entry: usize,

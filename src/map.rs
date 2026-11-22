@@ -10,13 +10,12 @@ impl Acl {
     /// The list with each named user's id read through `uid` and each named
     /// group's through `gid`, in canonical order.
     ///
-    /// This is the restatement a list needs where the ids it names mean
-    /// other users on the side it is carried to: across a user namespace's
-    /// map, or from one system's accounts to another's. The kernel translates
-    /// a list's ids itself when a process reads or sets it through a user
-    /// namespace, but keeps the entries in the order they were stored, so the
-    /// value it gives can name ids out of order; [`xattr::decode`] reads that
-    /// value as this method answers.
+    /// A list needs this restatement when it moves to where its ids mean
+    /// other users: across a user namespace's map, or to another system's
+    /// accounts. The kernel translates a list's ids itself when a process
+    /// reads or sets it through a user namespace. It keeps the entries in the
+    /// order they were stored, so the value it gives can name ids out of
+    /// order. [`xattr::decode`] reads that value as this method answers.
     ///
     /// The translations are asked about the named entries in canonical
     /// order, and no further once one has no answer. The owner's, owning
@@ -51,11 +50,11 @@ impl Acl {
     ///
     /// # Errors
     ///
-    /// [`MapError::Unmapped`] naming the first named entry, in canonical
-    /// order, whose id a translation has no answer for; and
-    /// [`MapError::Invalid`] where the translated entries make no valid list:
-    /// two ids translated to one, or an id translated to
-    /// [`UNDEFINED_ID`](crate::UNDEFINED_ID).
+    /// - [`MapError::Unmapped`] naming the first named entry, in canonical
+    ///   order, whose id a translation has no answer for.
+    /// - [`MapError::Invalid`] where the translated entries make no valid
+    ///   list: two ids translated to one, or an id translated to
+    ///   [`UNDEFINED_ID`](crate::UNDEFINED_ID).
     pub fn map_ids(
         &self,
         mut uid: impl FnMut(u32) -> Option<u32>,
@@ -79,15 +78,16 @@ impl Acl {
     }
 
     /// The list with each named entry's id read through `uid` or `gid`, as
-    /// [`map_ids`](Self::map_ids) reads it, and each named entry whose id a
-    /// translation has no answer for left out.
+    /// [`map_ids`](Self::map_ids) reads it. A named entry whose id a
+    /// translation has no answer for is left out.
     ///
     /// Leaving an entry out takes nothing from anyone a translation answers
-    /// for: each keeps what the list granted them, and the mask, which bounds
-    /// the owning group and every named entry, is kept. The entry left out
+    /// for. Each keeps what the list granted them. The mask, which bounds the
+    /// owning group and every named entry, is kept too. The entry left out
     /// granted or denied something to someone the other side has no id for.
-    /// [`narrowed`](Self::narrowed) is the answer for a list that cannot be
-    /// given at all, and gives a named user or group what their class is
+    ///
+    /// Where the list cannot be given at all, [`narrowed`](Self::narrowed) is
+    /// the answer. It gives a named user or group what their class is
     /// granted, which can be more than the list granted them.
     ///
     /// The translations are asked about every named entry, in canonical
@@ -106,7 +106,7 @@ impl Acl {
     /// ])?;
     /// // A namespace mapping user 1 to 100000, and no one else.
     /// let partial = acl.map_ids_partial(|id| (id == 1).then_some(100_000), |_| None)?;
-    /// // User 1's denial is kept for the id it is carried to.
+    /// // User 1's denial is kept for the id it is mapped to.
     /// assert_eq!(partial.list.perm(Qualifier::User(100_000)), Some(Perm::NONE));
     /// assert_eq!(partial.left_out, 1);
     /// # Ok::<(), file_acl::Invalid>(())
@@ -149,7 +149,7 @@ impl Acl {
 pub struct Partial {
     /// The list, with every entry that had an answer.
     pub list: Acl,
-    /// How many named entries had none, and are left out.
+    /// The number of named entries that had none, and are left out.
     pub left_out: usize,
 }
 
@@ -165,9 +165,9 @@ pub enum MapError {
         /// The id the translation has no answer for.
         id: u32,
     },
-    /// The translated entries make no valid list: two ids were translated to
-    /// one, which the list then names twice, or an id was translated to the
-    /// undefined id.
+    /// The translated entries make no valid list. Either two ids were
+    /// translated to one, which the list then names twice, or an id was
+    /// translated to the undefined id.
     Invalid(Invalid),
 }
 
