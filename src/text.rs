@@ -161,24 +161,39 @@ pub fn parse(text: &[u8]) -> Result<Option<Parsed>, ParseError> {
     if let Some(at) = text.iter().position(|&byte| byte == 0) {
         return Err(ParseError::Nul { at });
     }
+    // The text is read twice: once to count its entries, then again to hold
+    // them in a list of exactly that many. A list grown as it is read has up
+    // to twice the room its entries need, and holds its old room and its new
+    // at once while it grows: up to three times what the entries take. An
+    // entry held already takes several times the room of its text.
+    let count = read_entries(text, |_| {})?;
+    if count == 0 {
+        return Err(ParseError::NoEntry);
+    }
+    let mut entries = Vec::with_capacity(count);
+    read_entries(text, |entry| entries.push(entry))?;
+    Ok(Some(Parsed { entries }))
+}
+
+/// Reads the entries of `text`, which holds no NUL, giving each to `each` in
+/// order, and returns how many there are.
+fn read_entries(text: &[u8], mut each: impl FnMut(TextEntry)) -> Result<usize, ParseError> {
     let mut cursor = Cursor { text, rest: text };
-    let mut entries = Vec::new();
+    let mut count: usize = 0;
     loop {
         cursor.skip_space();
         match cursor.peek() {
-            None => break,
+            None => return Ok(count),
             // `end_of_entry` reads every comment after the first entry.
             Some(b'#') => return Err(ParseError::LeadingComment { at: cursor.at() }),
             Some(_) => {
-                entries.push(cursor.entry()?);
+                each(cursor.entry()?);
                 cursor.end_of_entry()?;
+                // An entry is at least one byte of the text, so the count
+                // stays below its length.
+                count = count.saturating_add(1);
             }
         }
-    }
-    if entries.is_empty() {
-        Err(ParseError::NoEntry)
-    } else {
-        Ok(Some(Parsed { entries }))
     }
 }
 
@@ -394,6 +409,8 @@ impl Parsed {
             }
         }
         if named && !held {
+            // Room for the one entry, where `push` alone would double it.
+            self.entries.reserve_exact(1);
             self.entries.push(TextEntry {
                 tag: Tag::Mask,
                 who: Who::Nobody,
@@ -1214,4 +1231,58 @@ fn unescape(raw: &[u8], at: usize) -> Result<Vec<u8>, ParseError> {
         }
     }
     Ok(decoded)
+}
+
+// What `parse` holds is private, so its bound is checked here rather than in
+// `tests/`.
+#[cfg(test)]
+mod tests {
+    use alloc::vec::Vec;
+
+    use super::{Parsed, Who, parse};
+
+    /// The room `parsed` holds its names in, in bytes.
+    fn name_room(parsed: &Parsed) -> usize {
+        parsed
+            .entries
+            .iter()
+            .map(|entry| match &entry.who {
+                Who::Name { name, .. } => name.capacity(),
+                Who::Nobody | Who::Id(_) => 0,
+            })
+            .sum()
+    }
+
+    /// A text's entries are held with no room to spare, and its names in no
+    /// more room than the text takes. What `parse` keeps is therefore one
+    /// `TextEntry` per entry and at most the text's length again. That holds
+    /// at every count, one just past a power of two among them.
+    #[test]
+    fn a_parsed_text_holds_its_entries_and_no_more() {
+        let mut texts: Vec<Vec<u8>> = Vec::new();
+        for count in [
+            1, 2, 3, 4, 5, 7, 8, 9, 63, 64, 65, 1_000, 1_024, 1_025, 65_537,
+        ] {
+            texts.push(b"m:r,".repeat(count));
+            let mut named = b"u::rw-\ng::r--\nm::rwx\no::---\n".to_vec();
+            for at in 0..count {
+                named.extend_from_slice(alloc::format!("u:n{at}\\072x:r--:{at}\n").as_bytes());
+            }
+            texts.push(named);
+        }
+        texts.push(b"  u::rw- #c\n\n g::r--,o::---,".to_vec());
+        for text in &texts {
+            let parsed = parse(text)
+                .expect("the text parses")
+                .expect("the text holds a list");
+            assert_eq!(parsed.entries.capacity(), parsed.entries.len());
+            assert!(name_room(&parsed) <= text.len());
+        }
+        let parsed = parse(b"u::rw-,u:1:r,g::r,o::-")
+            .expect("the text parses")
+            .expect("the text holds a list")
+            .with_computed_mask();
+        assert_eq!(parsed.entries.len(), 5);
+        assert_eq!(parsed.entries.capacity(), parsed.entries.len());
+    }
 }
