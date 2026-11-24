@@ -210,6 +210,8 @@ impl core::panic::unwind_safe::RefUnwindSafe for file_acl::xattr::DecodeError
 impl core::panic::unwind_safe::UnwindSafe for file_acl::xattr::DecodeError
 pub const file_acl::xattr::ACCESS: &str
 pub const file_acl::xattr::DEFAULT: &str
+pub const file_acl::xattr::MAX_ENTRIES: usize
+pub const file_acl::xattr::MAX_LEN: usize
 pub fn file_acl::xattr::decode(&[u8]) -> core::result::Result<core::option::Option<file_acl::Acl>, file_acl::xattr::DecodeError>
 pub fn file_acl::xattr::encode(&file_acl::Acl) -> alloc::vec::Vec<u8>
 #[non_exhaustive] pub enum file_acl::Invalid

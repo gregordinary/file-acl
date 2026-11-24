@@ -26,11 +26,12 @@
 //!
 //! # Length
 //!
-//! The kernel takes an extended attribute's value of at most 65,536 bytes. A
-//! value therefore holds at most 8,191 entries: a 4-byte header and 8,191
-//! 8-byte records make 65,532 bytes. [`decode`] refuses a longer value, and
+//! The kernel takes an extended attribute's value of at most 65,536 bytes
+//! ([`MAX_LEN`]). A value therefore holds at most 8,191 entries
+//! ([`MAX_ENTRIES`]): a 4-byte header and 8,191 8-byte records make 65,532
+//! bytes. [`decode`] refuses a longer value, and
 //! [`mode::set`](crate::mode::set) a longer list, before anything else, as
-//! the kernel does.
+//! the kernel does. [`encode`] writes a value for a list of any length.
 //!
 //! A filesystem can refuse a shorter list, with `ENOSPC`, which the crate
 //! cannot know. ext4 with 4 KiB blocks refuses a list of a thousand entries,
@@ -58,12 +59,16 @@ const HEADER: usize = 4;
 const ENTRY: usize = 8;
 
 /// The length of the longest value the kernel takes for any extended
-/// attribute (`XATTR_SIZE_MAX`).
-const MAX_LEN: usize = 65_536;
+/// attribute, in bytes: 65,536 (`XATTR_SIZE_MAX`). [`decode`] refuses a
+/// longer value.
+pub const MAX_LEN: usize = 65_536;
 
-/// The most entries a value the kernel takes holds: `4 + 8 * 8,191` is
-/// 65,532 bytes.
-pub(crate) const MAX_ENTRIES: usize = (MAX_LEN - HEADER) / ENTRY;
+/// The most entries a value the kernel takes holds: 8,191. A 4-byte header
+/// and 8,191 8-byte records make 65,532 bytes.
+///
+/// [`encode`] writes a longer list's value, which the kernel refuses with
+/// `E2BIG`. [`mode::set`](crate::mode::set) refuses to set such a list.
+pub const MAX_ENTRIES: usize = (MAX_LEN - HEADER) / ENTRY;
 
 /// The list `value` holds, or `None` where it holds none.
 ///
@@ -171,11 +176,13 @@ pub fn decode(value: &[u8]) -> Result<Option<Acl>, DecodeError> {
 /// therefore a function of the list alone, and [`decode`] reads it back as
 /// `acl`.
 ///
-/// For a list of at most 8,191 entries, the kernel accepts the value and,
-/// where it stores it, reads it back byte for byte. A longer list's value is
-/// [longer than the kernel takes](crate::xattr#length). [`decode`] refuses it
-/// ([`DecodeError::TooLong`]), as [`mode::set`](crate::mode::set) refuses to
-/// set the list.
+/// For a list of at most [`MAX_ENTRIES`] entries, the kernel accepts the
+/// value and, where it stores it, reads it back byte for byte. A longer
+/// list's value is [longer than the kernel takes](crate::xattr#length).
+/// [`decode`] refuses it ([`DecodeError::TooLong`]), as
+/// [`mode::set`](crate::mode::set) refuses to set the list. To refuse such a
+/// list before writing its value, compare `acl.entries().len()` with
+/// [`MAX_ENTRIES`].
 #[must_use]
 pub fn encode(acl: &Acl) -> Vec<u8> {
     let entries = acl.entries();

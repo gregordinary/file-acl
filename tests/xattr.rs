@@ -912,6 +912,8 @@ fn a_value_longer_than_the_kernel_takes_is_refused_first() {
             assert_eq!(len, value.len(), "{label}");
         }
     }
+    // The limits as measured above.
+    assert_eq!((xattr::MAX_LEN, xattr::MAX_ENTRIES), (65_536, 8_191));
     // A list longer than the kernel takes is encoded, to a value `decode`
     // refuses, as the kernel does.
     let entries = |named: u32| {
@@ -921,10 +923,13 @@ fn a_value_longer_than_the_kernel_takes_is_refused_first() {
             .into_entries()
     };
     let mut longest = entries(8187);
+    assert_eq!(longest.len(), xattr::MAX_ENTRIES);
     let value = xattr::encode(&Acl::new(longest.clone()).unwrap());
     assert_eq!(value.len(), 65_532);
+    assert!(value.len() <= xattr::MAX_LEN);
     longest.push(Entry::new(Qualifier::User(8188), R));
     let value = xattr::encode(&Acl::new(longest).unwrap());
+    assert!(value.len() > xattr::MAX_LEN);
     assert_eq!(
         xattr::decode(&value),
         Err(DecodeError::TooLong { len: 65_540 })

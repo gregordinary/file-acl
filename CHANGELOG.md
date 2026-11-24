@@ -40,6 +40,9 @@ changes, even when no signature of the public API does.
 - `xattr::encode`, which writes a list's entries in canonical order. The
   owner, owning group, mask and other entries have the `UNDEFINED_ID` as their
   id.
+- `xattr::MAX_LEN` and `xattr::MAX_ENTRIES`: the longest value the kernel
+  takes, 65,536 bytes, and the most entries such a value holds, 8,191.
+  `encode` writes a value for a longer list, which the kernel refuses.
 - The rules that tie a list to a file's mode, in `mode` and on `Acl`.
   `mode_bits` is the permission bits a file with a list as its access list
   shows. The group bits are the mask's where there is one. `is_minimal` says
