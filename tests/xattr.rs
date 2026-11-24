@@ -471,8 +471,7 @@ fn each_rule_a_value_breaks_says_what_breaks_it() {
                 entry: 1,
                 tag: Tag::User,
             },
-            "the named user entry at position 1 has the undefined id 4294967295, \
-             as read for an id the reader's user namespace does not map",
+            "the named user entry at position 1 has the undefined id 4294967295",
         ),
         (
             DecodeError::from(Invalid::Missing { tag: Tag::Mask }),

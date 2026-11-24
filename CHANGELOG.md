@@ -35,8 +35,9 @@ changes, even when no signature of the public API does.
   is `TooLong`. The kernel refuses it before anything else, and so does
   `decode`. The other refusals are a `Version` other than 2, a `Partial`
   entry, an `UnknownTag`, a `StrayPerm` bit, entries out of `TagOrder`, and an
-  `Invalid` list. A named entry with the `UNDEFINED_ID` is `UnmappedId`, which
-  is how a process reads an id its user namespace does not map.
+  `Invalid` list. A named entry with the `UNDEFINED_ID` is `UnmappedId`. The
+  kernel gives such a value to a process whose user namespace does not map
+  the entry's id.
 - `xattr::encode`, which writes a list's entries in canonical order. The
   owner, owning group, mask and other entries have the `UNDEFINED_ID` as their
   id.

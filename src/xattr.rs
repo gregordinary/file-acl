@@ -250,13 +250,14 @@ pub enum DecodeError {
         /// The tag of the entry before it.
         previous: Tag,
     },
-    /// A named entry has [`UNDEFINED_ID`] as its id.
+    /// A named entry has [`UNDEFINED_ID`] as its id, which the kernel refuses
+    /// to set.
     ///
-    /// A process in a user namespace reads this for a named entry whose id
-    /// its namespace does not map. The kernel reports the id as
+    /// A value from any source can hold one, an archive's record among them.
+    /// The kernel gives one itself to a process in a user namespace, for a
+    /// named entry whose id that namespace does not map. It reports the id as
     /// `UNDEFINED_ID`, not as the overflow id `stat` reports for an unmapped
-    /// owner. The list cannot be set again as read, since the kernel refuses
-    /// a named entry with `UNDEFINED_ID` as its id.
+    /// owner. The list cannot be set again as read.
     UnmappedId {
         /// The entry's position in the value.
         entry: usize,
@@ -309,8 +310,7 @@ impl fmt::Display for DecodeError {
             ),
             DecodeError::UnmappedId { entry, tag } => write!(
                 f,
-                "the {tag} entry at position {entry} has the undefined id {UNDEFINED_ID}, \
-                 as read for an id the reader's user namespace does not map"
+                "the {tag} entry at position {entry} has the undefined id {UNDEFINED_ID}"
             ),
             DecodeError::Invalid(invalid) => invalid.fmt(f),
         }
