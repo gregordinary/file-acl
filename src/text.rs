@@ -54,6 +54,10 @@
 //!   carriage return. It may not begin with `#`. In a name, `\` and three
 //!   octal digits stand for the byte they give, and `\\` for one backslash.
 //!   A backslash before anything else is itself.
+//! - An escape can give any byte but a NUL. The name a lookup is given can
+//!   therefore hold a colon, a comma, a line end or a carriage return, or
+//!   begin with `#`. libacl's lookups are given the same name:
+//!   `group:co\072lon:r--` names the group `co:lon`.
 //! - `#` begins a comment, which runs to the end of the line. A comment
 //!   begins where an entry has ended: after its permissions, after the comma
 //!   that ends it, or on a line of its own. `getfacl` writes `#effective:`
@@ -360,12 +364,12 @@ impl Parsed {
         })
     }
 
-    /// The text's entries with the mask `setfacl` computes, as
+    /// The text's entries with a computed mask, as
     /// [`Acl::with_computed_mask`] computes it.
     ///
     /// The mask is the union of what the owning group's entry and every named
-    /// entry grant. It replaces any mask the text states, and is added where
-    /// the text names someone and states none.
+    /// entry grant. It replaces any mask the text states, as `setfacl --mask`
+    /// does, and is added where the text names someone and states none.
     ///
     /// It needs no names, since a mask is computed from permissions alone.
     ///

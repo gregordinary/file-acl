@@ -205,13 +205,14 @@ impl Acl {
         )
     }
 
-    /// The list of `entries`, in any order, with the mask `setfacl` computes:
-    /// the union of what the owning group's entry and every named entry
-    /// grant.
+    /// The list of `entries`, in any order, with a computed mask: the union
+    /// of what the owning group's entry and every named entry grant.
     ///
-    /// The computed mask replaces any mask the entries hold, and is added
-    /// where they name a user or group and hold none. Entries naming no one
-    /// and holding no mask get none, as `setfacl` leaves them. libacl's
+    /// The computed mask replaces any mask the entries hold, as
+    /// `setfacl --mask` does. Without `--mask`, `setfacl` keeps a mask it is
+    /// given and computes one only where it is given none. The mask is added
+    /// where the entries name a user or group and hold none. Entries naming no
+    /// one and holding no mask get none, as `setfacl` leaves them. libacl's
     /// `acl_calc_mask` adds one to them too, so the kernel stores a list it
     /// would otherwise not.
     ///

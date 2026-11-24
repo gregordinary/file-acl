@@ -53,8 +53,9 @@ changes, even when no signature of the public API does.
 - `Acl::narrowed`, the minimal list granting the owner, and anyone the list
   does not name, what the list grants them.
 - `Acl::with_computed_mask`, which makes a list from entries with the mask
-  `setfacl` computes. It adds none to entries that name no one and hold none,
-  where libacl's `acl_calc_mask` adds one.
+  computed as `setfacl --mask` computes it, replacing any the entries hold.
+  It adds none to entries that name no one and hold none, where libacl's
+  `acl_calc_mask` adds one.
 - `mode::set`, which says what setting an access or default list
   (`ListKind`), or none, leaves on a file. A `FileKind` is a directory, a
   symbolic link or another kind of file. It gives the mode, and the list the
@@ -99,8 +100,9 @@ changes, even when no signature of the public API does.
 - `Parsed::resolve_partial`, which leaves out each entry naming someone with
   no answer and no recorded id, as `Acl::map_ids_partial` leaves out an id.
   `Parsed::holds_names` says whether a text holds a name, and so needs a
-  lookup at all. `Parsed::with_computed_mask` computes the mask `setfacl`
-  does, and `Parsed::narrowed` gives the narrowing, which needs no names.
+  lookup at all. `Parsed::with_computed_mask` computes the mask as
+  `Acl::with_computed_mask` does, and `Parsed::narrowed` gives the narrowing,
+  which needs no names.
 - `write`, which spells a list with numeric ids, and `write_named`, which
   spells it with the names the caller's lookups give. Names are escaped so
   that libacl and `parse` read them back. A `Spelling` sets long or short
