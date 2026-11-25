@@ -163,27 +163,36 @@ pub fn parse(text: &[u8]) -> Result<Option<Parsed>, ParseError> {
     if text.is_empty() {
         return Ok(None);
     }
-    if let Some(at) = text.iter().position(|&byte| byte == 0) {
+    // `contains` finds a NUL a word at a time, and `position` a byte at a
+    // time, so `position` is asked only where there is one.
+    if text.contains(&0)
+        && let Some(at) = text.iter().position(|&byte| byte == 0)
+    {
         return Err(ParseError::Nul { at });
     }
     // The text is read twice: once to count its entries, then again to hold
     // them in a list of exactly that many. A list grown as it is read has up
     // to twice the room its entries need, and holds its old room and its new
     // at once while it grows: up to three times what the entries take. An
-    // entry held already takes several times the room of its text.
+    // entry held already takes several times the room of its text. The
+    // first reading holds nothing, so it allocates nothing but the room to
+    // decode an escaped name in.
     let count = read_entries(text, |_| {})?;
     if count == 0 {
         return Err(ParseError::NoEntry);
     }
     let mut entries = Vec::with_capacity(count);
-    read_entries(text, |entry| entries.push(entry))?;
+    read_entries(text, |entry| entries.push(entry.held()))?;
     Ok(Some(Parsed { entries }))
 }
 
 /// Reads the entries of `text`, which holds no NUL, giving each to `each` in
-/// order, and returns how many there are.
-fn read_entries(text: &[u8], mut each: impl FnMut(TextEntry)) -> Result<usize, ParseError> {
+/// order, and returns how many there are. An entry's name is borrowed, from
+/// the text or from the room its escapes are decoded in, until the next
+/// entry is read.
+fn read_entries(text: &[u8], mut each: impl FnMut(TextEntry<&[u8]>)) -> Result<usize, ParseError> {
     let mut cursor = Cursor { text, rest: text };
+    let mut decoded = Vec::new();
     let mut count: usize = 0;
     loop {
         cursor.skip_space();
@@ -192,7 +201,7 @@ fn read_entries(text: &[u8], mut each: impl FnMut(TextEntry)) -> Result<usize, P
             // `end_of_entry` reads every comment after the first entry.
             Some(b'#') => return Err(ParseError::LeadingComment { at: cursor.at() }),
             Some(_) => {
-                each(cursor.entry()?);
+                each(cursor.entry(&mut decoded)?);
                 cursor.end_of_entry()?;
                 // An entry is at least one byte of the text, so the count
                 // stays below its length.
@@ -210,29 +219,46 @@ pub struct Parsed {
     entries: Vec<TextEntry>,
 }
 
-/// One entry of a list's text.
+/// One entry of a list's text, its name held as `N`: a `Vec<u8>` in a
+/// [`Parsed`], and borrowed while the text is read.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-struct TextEntry {
+struct TextEntry<N = Vec<u8>> {
     /// The entry's tag: [`Tag::User`] or [`Tag::Group`] where `who` names
     /// someone, and otherwise the tag of an entry naming no one.
     tag: Tag,
-    who: Who,
+    who: Who<N>,
     perm: Perm,
 }
 
 /// Whom an entry is for, as its text says.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-enum Who {
+enum Who<N = Vec<u8>> {
     /// The owner, the owning group, the mask or other.
     Nobody,
     /// The user or group with this id.
     Id(u32),
     /// The user or group with this name, its escapes decoded, and the id a
     /// fourth field records beside it, where it has one.
-    Name {
-        name: Vec<u8>,
-        recorded: Option<u32>,
-    },
+    Name { name: N, recorded: Option<u32> },
+}
+
+impl TextEntry<&[u8]> {
+    /// The entry with its name held, in exactly the room it takes.
+    fn held(self) -> TextEntry {
+        let who = match self.who {
+            Who::Nobody => Who::Nobody,
+            Who::Id(id) => Who::Id(id),
+            Who::Name { name, recorded } => Who::Name {
+                name: name.to_vec(),
+                recorded,
+            },
+        };
+        TextEntry {
+            tag: self.tag,
+            who,
+            perm: self.perm,
+        }
+    }
 }
 
 /// Which id [`Parsed::resolve`] gives an entry that holds both a name and,
@@ -966,6 +992,10 @@ enum Reading {
 /// zero, in the range of an id, are read as an id here. A binary number is
 /// [`Reading::Loose`] whichever glibc libacl was built against.
 fn reading(qualifier: &[u8]) -> Reading {
+    // The common case first: an id, which the rules below read as one too.
+    if let Some(id) = decimal(qualifier) {
+        return Reading::Id(id);
+    }
     // C's `isspace`, which `strtol` and `strtoul` pass over first.
     let space = |byte: &u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r');
     let start = qualifier
@@ -995,22 +1025,20 @@ fn reading(qualifier: &[u8]) -> Reading {
             Some(_) => body.iter().all(u8::is_ascii_digit),
             None => false,
         });
-    if !whole {
-        return Reading::Name;
-    }
-    decimal(qualifier).map_or(Reading::Loose, Reading::Id)
+    if whole { Reading::Loose } else { Reading::Name }
 }
 
 /// The id `digits` spells as decimal digits with no leading zero, where it
 /// fits in an id.
 fn decimal(digits: &[u8]) -> Option<u32> {
-    let plain = !digits.is_empty()
-        && digits.iter().all(u8::is_ascii_digit)
-        && (digits.len() == 1 || digits.first() != Some(&b'0'));
-    if !plain {
+    if digits.is_empty() || (digits.len() > 1 && digits.first() == Some(&b'0')) {
         return None;
     }
-    core::str::from_utf8(digits).ok()?.parse().ok()
+    digits.iter().try_fold(0u32, |id, &digit| {
+        // An ASCII digit's value is its low four bits.
+        let value = digit.is_ascii_digit().then_some(u32::from(digit & 0x0f))?;
+        id.checked_mul(10)?.checked_add(value)
+    })
 }
 
 /// A reading position in a text.
@@ -1070,8 +1098,12 @@ impl<'a> Cursor<'a> {
     }
 
     /// Reads an entry, from its tag to the end of its permissions or its
-    /// fourth field.
-    fn entry(&mut self) -> Result<TextEntry, ParseError> {
+    /// fourth field. A name is borrowed from the text, or from `decoded`
+    /// where its escapes are decoded there.
+    fn entry<'d>(&mut self, decoded: &'d mut Vec<u8>) -> Result<TextEntry<&'d [u8]>, ParseError>
+    where
+        'a: 'd,
+    {
         let start = self.at();
         let (object, named) = match self.take_while(|byte| byte.is_ascii_lowercase()) {
             b"user" | b"u" => (Tag::UserObj, Some(Tag::User)),
@@ -1098,7 +1130,7 @@ impl<'a> Cursor<'a> {
         };
         let qualifier_at = self.at();
         let raw = self.take_while(|byte| !matches!(byte, b':' | b','));
-        let who = qualifier(raw, qualifier_at)?;
+        let who = qualifier(raw, qualifier_at, decoded)?;
         if !self.eat(b':') {
             return Err(ParseError::Incomplete { at: self.at() });
         }
@@ -1197,8 +1229,13 @@ impl<'a> Cursor<'a> {
 }
 
 /// Whom a user or group entry's qualifier names: `None` where it is empty,
-/// for the owner or the owning group.
-fn qualifier(raw: &[u8], at: usize) -> Result<Option<Who>, ParseError> {
+/// for the owner or the owning group. A name is borrowed from `raw` where it
+/// holds no escape, and otherwise decoded into `decoded` and borrowed from it.
+fn qualifier<'d>(
+    raw: &'d [u8],
+    at: usize,
+    decoded: &'d mut Vec<u8>,
+) -> Result<Option<Who<&'d [u8]>>, ParseError> {
     if raw.is_empty() {
         return Ok(None);
     }
@@ -1212,27 +1249,34 @@ fn qualifier(raw: &[u8], at: usize) -> Result<Option<Who>, ParseError> {
         .iter()
         .position(|byte| matches!(byte, b'\n' | b'\r'))
         .map(|offset| at.saturating_add(offset));
-    let decoded = unescape(raw, at).map_err(|error| match (error, line_end) {
-        (ParseError::Escape { at: escape }, Some(end)) if end < escape => {
-            ParseError::LineEnd { at: end }
-        }
-        (error, _) => error,
-    })?;
-    match (reading(&decoded), line_end) {
+    let name = if raw.contains(&b'\\') {
+        unescape(raw, at, decoded).map_err(|error| match (error, line_end) {
+            (ParseError::Escape { at: escape }, Some(end)) if end < escape => {
+                ParseError::LineEnd { at: end }
+            }
+            (error, _) => error,
+        })?;
+        decoded.as_slice()
+    } else {
+        raw
+    };
+    match (reading(name), line_end) {
         (Reading::Id(id), _) => Ok(Some(Who::Id(id))),
         (Reading::Loose, _) => Err(ParseError::Number { at }),
         (Reading::Name, Some(end)) => Err(ParseError::LineEnd { at: end }),
         (Reading::Name, None) => Ok(Some(Who::Name {
-            name: decoded,
+            name,
             recorded: None,
         })),
     }
 }
 
-/// `raw` with its escapes decoded: `\` and three octal digits as the byte
-/// they give, `\\` as one backslash, and any other backslash as itself.
-fn unescape(raw: &[u8], at: usize) -> Result<Vec<u8>, ParseError> {
-    let mut decoded = Vec::with_capacity(raw.len());
+/// Writes `raw` with its escapes decoded into `decoded`, in place of what it
+/// held: `\` and three octal digits as the byte they give, `\\` as one
+/// backslash, and any other backslash as itself.
+fn unescape(raw: &[u8], at: usize, decoded: &mut Vec<u8>) -> Result<(), ParseError> {
+    decoded.clear();
+    decoded.reserve(raw.len());
     let mut rest = raw;
     while let Some((&byte, after)) = rest.split_first() {
         if byte != b'\\' {
@@ -1245,9 +1289,11 @@ fn unescape(raw: &[u8], at: usize) -> Result<Vec<u8>, ParseError> {
             .split_first_chunk::<3>()
             .filter(|(digits, _)| digits.iter().all(|digit| matches!(digit, b'0'..=b'7')))
         {
-            let value = core::str::from_utf8(digits)
-                .ok()
-                .and_then(|digits| u8::from_str_radix(digits, 8).ok());
+            // An octal digit's value is its low three bits. A value past a
+            // byte overflows.
+            let value = digits.iter().try_fold(0u8, |value, &digit| {
+                value.checked_mul(8)?.checked_add(digit & 0o7)
+            });
             match value {
                 Some(value) if value != 0 => decoded.push(value),
                 _ => {
@@ -1263,7 +1309,7 @@ fn unescape(raw: &[u8], at: usize) -> Result<Vec<u8>, ParseError> {
             rest = after;
         }
     }
-    Ok(decoded)
+    Ok(())
 }
 
 // What `parse` holds is private, so its bound is checked here rather than in
