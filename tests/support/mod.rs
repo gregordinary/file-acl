@@ -752,9 +752,10 @@ pub(crate) enum Reading {
     /// The list read, which `acl_check` passes: its version-2 attribute
     /// value.
     Valid(Vec<u8>),
-    /// A list read, which `acl_check` refuses with this code (in
-    /// hexadecimal, as `0x2000`).
-    Invalid(String),
+    /// A list read, which `acl_check` refuses with `code` (in hexadecimal,
+    /// as `0x2000`): its entries as libacl holds them, in version-2 form,
+    /// whatever rules they break.
+    Invalid { code: String, value: Vec<u8> },
 }
 
 impl Oracle {
@@ -765,9 +766,10 @@ impl Oracle {
             Answer::Ok(fields) if fields.len() == 2 && fields[0] == "valid" => {
                 Reading::Valid(unhex(&fields[1]))
             }
-            Answer::Ok(fields) if fields.len() == 3 && fields[0] == "invalid" => {
-                Reading::Invalid(fields[1].clone())
-            }
+            Answer::Ok(fields) if fields.len() == 3 && fields[0] == "invalid" => Reading::Invalid {
+                code: fields[1].clone(),
+                value: unhex(&fields[2]),
+            },
             Answer::Err(word) if word == "unread" => Reading::Unread,
             other => panic!("read answered {other:?}"),
         }

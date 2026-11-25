@@ -164,7 +164,7 @@ fn libacl_notation(reading: &Reading) -> String {
                 .expect("libacl's list holds entries");
             format!("valid {}", rendered(&acl))
         }
-        Reading::Invalid(code) => format!("invalid {code}"),
+        Reading::Invalid { code, .. } => format!("invalid {code}"),
     }
 }
 
@@ -181,6 +181,64 @@ fn agree(libacl: &str, crate_says: &str) -> bool {
         Some("invalid") => crate_says.starts_with("invalid"),
         _ => false,
     }
+}
+
+/// The entries of a version-2 value, whatever rules they break: libacl's
+/// reading of a text whose list `acl_check` refuses.
+fn entries_of(value: &[u8]) -> Vec<Entry> {
+    let (records, rest) = value
+        .get(4..)
+        .expect("a value has a header")
+        .as_chunks::<8>();
+    assert!(rest.is_empty(), "a partial entry in {value:02x?}");
+    records
+        .iter()
+        .map(|&[t0, t1, p0, p1, i0, i1, i2, i3]| {
+            let tag = Tag::from_raw(u16::from_le_bytes([t0, t1])).expect("a tag");
+            let perm = Perm::from_bits(u16::from_le_bytes([p0, p1])).expect("permissions");
+            Entry::new(
+                Qualifier::new(tag, u32::from_le_bytes([i0, i1, i2, i3])),
+                perm,
+            )
+        })
+        .collect()
+}
+
+/// What the crate's rules make of entries that are no valid list: the rule
+/// they break, and the list, or the rule, once the mask is computed.
+///
+/// Two readings of a text, each a list its checker refuses, agree only where
+/// these are the same for both. A misread entry in a list that is invalid
+/// for another reason shows in one or the other: where a mask is the only
+/// fault, the two lists are compared whole.
+#[derive(Clone, PartialEq, Debug)]
+struct Judged {
+    invalid: Invalid,
+    masked: Result<Acl, Invalid>,
+}
+
+/// The crate's judgement of `entries`, where they make no valid list.
+fn judged(entries: Vec<Entry>) -> Option<Judged> {
+    let invalid = Acl::new(entries.clone()).err()?;
+    Some(Judged {
+        invalid,
+        masked: Acl::with_computed_mask(entries),
+    })
+}
+
+/// The crate's judgement of the entries it reads in `parsed`, their names
+/// resolved through the database, where they make no valid list.
+fn judged_parsed(parsed: &Parsed) -> Option<Judged> {
+    let resolved = |parsed: &Parsed| match parsed.resolve(user_id, group_id, Prefer::Name) {
+        Ok(acl) => Ok(acl),
+        Err(ResolveError::Invalid(invalid)) => Err(invalid),
+        Err(other) => panic!("resolve answered {other:?}"),
+    };
+    let invalid = resolved(parsed).err()?;
+    Some(Judged {
+        invalid,
+        masked: resolved(&parsed.clone().with_computed_mask()),
+    })
 }
 
 // The differences from libacl the text module's documentation states.
@@ -1866,7 +1924,7 @@ const MEASURED_2_4: &[(&[u8], &str, Option<&str>)] = &[
 fn digits_past_the_last_id_are_names(libacl: &mut support::Oracle) -> bool {
     match libacl.read(b"u::rw-,u:4294967295:r--,g::r--,m::rwx,o::---") {
         Reading::Valid(_) => true,
-        Reading::Invalid(_) => false,
+        Reading::Invalid { .. } => false,
         Reading::Unread => panic!("libacl refuses a text naming user 4294967295"),
     }
 }
@@ -1962,23 +2020,42 @@ fn every_text_libacl_was_asked_about_parses_as_measured() {
         assert!(stated.is_none_or(|s| s == DIGITS_AS_NAME), "{shown:?}");
     }
 
-    // libacl still reads each as recorded, where it can be asked.
+    // libacl still reads each as recorded, where it can be asked. Where both
+    // read a list their checkers refuse, the crate's rules make the same of
+    // libacl's entries as of its own.
     let Some(mut libacl) = libacl_with_the_accounts("text-measured") else {
         return;
     };
     let names = digits_past_the_last_id_are_names(&mut libacl);
-    for &(text, recorded, _, _) in MEASURED {
+    let mut invalid_to_both = 0;
+    for &(text, recorded, crate_says, _) in MEASURED {
+        let shown = String::from_utf8_lossy(text);
         let recorded = MEASURED_2_4
             .iter()
             .find(|row| names && row.0 == text)
             .map_or(recorded, |row| row.1);
+        let reading = libacl.read(text);
         assert_eq!(
-            libacl_notation(&libacl.read(text)),
+            libacl_notation(&reading),
             recorded,
-            "{:?}, libacl reading digits past the last id as a name: {names}",
-            String::from_utf8_lossy(text)
+            "{shown:?}, libacl reading digits past the last id as a name: {names}"
         );
+        if let (Reading::Invalid { value, .. }, true) =
+            (&reading, crate_says.starts_with("invalid"))
+        {
+            let parsed = text::parse(text).expect("parsed").expect("a list");
+            assert_eq!(
+                judged(entries_of(value)),
+                judged_parsed(&parsed),
+                "{shown:?}"
+            );
+            invalid_to_both += 1;
+        }
     }
+    assert!(
+        invalid_to_both > 10,
+        "too few invalid to both: {invalid_to_both}"
+    );
 }
 
 /// One entry of a generated text, field by field as it is written.
@@ -2428,7 +2505,7 @@ fn stated_refusal(text: &[u8], error: ParseError) -> Option<&'static str> {
 enum Crate {
     NoList,
     Refused(Option<ParseError>),
-    Invalid,
+    Invalid(Judged),
     List(Acl),
 }
 
@@ -2439,16 +2516,23 @@ fn crate_reading(text: &[u8]) -> Crate {
         Ok(Some(parsed)) => match parsed.resolve(user_id, group_id, Prefer::Name) {
             Ok(acl) => Crate::List(acl),
             Err(ResolveError::Unresolved { .. }) => Crate::Refused(None),
-            Err(ResolveError::Invalid(_)) => Crate::Invalid,
+            Err(ResolveError::Invalid(_)) => {
+                Crate::Invalid(judged_parsed(&parsed).expect("the entries are invalid"))
+            }
             Err(other) => panic!("resolve answered {other:?}"),
         },
     }
 }
 
-/// Whether the crate and libacl say the same of a text.
+/// Whether the crate and libacl say the same of a text: both refuse it, both
+/// read the same list, or both read a list their checkers refuse, which the
+/// crate's rules judge alike.
 fn agrees(ours: &Crate, libacl: &Reading) -> bool {
     match (ours, libacl) {
-        (Crate::Refused(_), Reading::Unread) | (Crate::Invalid, Reading::Invalid(_)) => true,
+        (Crate::Refused(_), Reading::Unread) => true,
+        (Crate::Invalid(ours), Reading::Invalid { value, .. }) => {
+            judged(entries_of(value)).as_ref() == Some(ours)
+        }
         (Crate::List(acl), Reading::Valid(value)) => {
             xattr::decode(value).ok().flatten().as_ref() == Some(acl)
         }
@@ -2465,6 +2549,9 @@ fn parse_agrees_with_libacl_over_generated_texts() {
     let mut rng = Rng::seeded(5);
     let mut agreed = BTreeMap::new();
     let mut stated = BTreeMap::new();
+    // Texts invalid to both whose lists are compared whole once the mask is
+    // computed.
+    let mut whole = 0;
     for case in 0..8000 {
         let generated = generated_text(&mut rng);
         let text = generated.text(true);
@@ -2478,23 +2565,24 @@ fn parse_agrees_with_libacl_over_generated_texts() {
             )
         };
         if agrees(&ours, &theirs) {
+            whole += usize::from(matches!(&ours, Crate::Invalid(judged) if judged.masked.is_ok()));
             let class = match ours {
                 Crate::Refused(_) => "refused by both",
-                Crate::Invalid => "invalid to both",
+                Crate::Invalid(_) => "invalid to both",
                 _ => "the same list",
             };
             *agreed.entry(class).or_insert(0) += 1;
             continue;
         }
         let reason = match (&ours, &theirs) {
-            (Crate::Refused(Some(error)), Reading::Valid(_) | Reading::Invalid(_)) => {
+            (Crate::Refused(Some(error)), Reading::Valid(_) | Reading::Invalid { .. }) => {
                 stated_refusal(&text, *error)
             }
-            (Crate::NoList, Reading::Invalid(_)) if text.is_empty() => Some(EMPTY),
+            (Crate::NoList, Reading::Invalid { .. }) if text.is_empty() => Some(EMPTY),
             // libacl refuses every fourth field; the crate reads the entry
             // as libacl reads it without the field, or, where its name has
             // no answer, as the id the field records.
-            (Crate::List(_) | Crate::Invalid, Reading::Unread) if generated.has_fourth() => {
+            (Crate::List(_) | Crate::Invalid(_), Reading::Unread) if generated.has_fourth() => {
                 let stripped = generated.text(false);
                 let without = libacl.read(&stripped);
                 let rescued = crate_reading(&stripped) == Crate::Refused(None);
@@ -2506,14 +2594,18 @@ fn parse_agrees_with_libacl_over_generated_texts() {
         // reads it as the undefined id or refuses it as a number.
         let reason = reason.or_else(|| {
             (names
-                && matches!(ours, Crate::Invalid | Crate::Refused(_))
+                && matches!(ours, Crate::Invalid(_) | Crate::Refused(_))
                 && generated.names_digits_past_the_last_id())
             .then_some(DIGITS_AS_NAME)
         });
         let reason = reason.unwrap_or_else(|| panic!("an unstated difference: {}", context()));
         *stated.entry(reason).or_insert(0) += 1;
     }
-    eprintln!("agreed {agreed:?}; stated differences {stated:?}");
+    eprintln!(
+        "agreed {agreed:?}, {whole} invalid to both compared whole with the mask computed; \
+         stated differences {stated:?}"
+    );
+    assert!(whole >= 50, "too few compared whole: {whole}");
     for (class, least) in [
         ("refused by both", 1000),
         ("invalid to both", 200),
