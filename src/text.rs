@@ -79,9 +79,12 @@
 //! Where libacl is loose, [`parse`] refuses what libacl reads:
 //!
 //! - A qualifier libacl reads as a number in a form other than decimal
-//!   digits. libacl reads it as C's `strtoul` does: signed (`-1`, `+5`),
-//!   hexadecimal (`0x10`), or octal after a leading zero (`010` is 8). It
-//!   also reads a number after leading whitespace.
+//!   digits. libacl reads it as C's `strtol` (libacl 2.3) or `strtoul`
+//!   (libacl 2.4) does: signed (`-1`, `+5`), hexadecimal (`0x10`), or octal
+//!   after a leading zero (`010` is 8). It also reads a number after leading
+//!   whitespace. Built against glibc 2.38 or later, libacl reads binary too
+//!   (`0b101` is 5). Built against an earlier glibc, it looks a binary
+//!   number up as a name. [`parse`] refuses it either way.
 //! - A number past the range of an id, which libacl 2.3 wraps (`4294967296`
 //!   is 0) and libacl 2.4 looks up as a name.
 //! - An escape that gives a NUL, or a value past a byte (`\400`). libacl 2.3
@@ -559,7 +562,9 @@ pub enum ParseError {
         at: usize,
     },
     /// A qualifier libacl reads as a number, written otherwise than as
-    /// decimal digits with no leading zero, or past the range of an id.
+    /// decimal digits with no leading zero, or past the range of an id. A
+    /// binary number (`0b1`) is one too, though only libacl built against
+    /// glibc 2.38 or later reads it as a number.
     Number {
         /// The offset of the qualifier.
         at: usize,
@@ -841,7 +846,8 @@ pub fn write(acl: &Acl, spelling: Spelling) -> Vec<u8> {
 ///
 /// The id is written in place of a name the text could not say. Such a name
 /// is empty, holds a NUL, or is one libacl would read as a number (`4242`,
-/// `0x10`). The lookups are asked about the named entries in canonical order.
+/// `0x10`, `0b1`). The lookups are asked about the named entries in
+/// canonical order.
 ///
 /// [`parse`] and [`Parsed::resolve`], with lookups that give each name its
 /// id, read the text back as `acl`. libacl reads it back as `acl` too, given
@@ -932,14 +938,19 @@ enum Reading {
 
 /// How libacl reads the qualifier `qualifier`, its escapes decoded.
 ///
-/// libacl reads a qualifier as a number where C's `strtoul`, in base 0,
-/// reads all of it. `strtoul` reads optional whitespace and a sign, then `0x`
-/// and hexadecimal digits, `0` and octal digits, or decimal digits.
-/// Measured: `08` and `0x` are names, `010` is 8, `0x10` is 16, `+5` is 5
-/// and ` 5` is 5. Only decimal digits with no whitespace, sign or leading
-/// zero, in the range of an id, are read as an id here.
+/// libacl reads a qualifier as a number where C's `strtol` (libacl 2.3) or
+/// `strtoul` (libacl 2.4), in base 0, reads all of it. Either reads optional
+/// whitespace and a sign, then `0x` and hexadecimal digits, `0` and octal
+/// digits, or decimal digits. Built against glibc 2.38 or later, libacl
+/// calls the C23 forms, which also read `0b` and binary digits.
+///
+/// Measured: `08`, `0x` and `0b` are names, `010` is 8, `0x10` is 16, `+5` is
+/// 5 and ` 5` is 5. `0b101` is 5, or a name where libacl is built against an
+/// earlier glibc. Only decimal digits with no whitespace, sign or leading
+/// zero, in the range of an id, are read as an id here. A binary number is
+/// [`Reading::Loose`] whichever glibc libacl was built against.
 fn reading(qualifier: &[u8]) -> Reading {
-    // C's `isspace`, which `strtoul` passes over first.
+    // C's `isspace`, which `strtol` and `strtoul` pass over first.
     let space = |byte: &u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\x0b' | b'\x0c' | b'\r');
     let start = qualifier
         .iter()
@@ -952,16 +963,22 @@ fn reading(qualifier: &[u8]) -> Reading {
         .strip_prefix(b"+")
         .or_else(|| body.strip_prefix(b"-"))
         .unwrap_or(body);
-    let hex = body
-        .strip_prefix(b"0x")
-        .or_else(|| body.strip_prefix(b"0X"))
-        .filter(|digits| digits.first().is_some_and(u8::is_ascii_hexdigit));
-    let whole = match (hex, body.first()) {
-        (Some(digits), _) => digits.iter().all(u8::is_ascii_hexdigit),
-        (None, Some(b'0')) => body.iter().all(|digit| matches!(digit, b'0'..=b'7')),
-        (None, Some(_)) => body.iter().all(u8::is_ascii_digit),
-        (None, None) => false,
+    // Whether `body` is all digits after a radix prefix, where the prefix
+    // is followed by at least one digit; `None` where it is not.
+    let prefixed = |lower: &[u8], upper: &[u8], digit: fn(&u8) -> bool| {
+        body.strip_prefix(lower)
+            .or_else(|| body.strip_prefix(upper))
+            .filter(|digits| digits.first().is_some_and(digit))
+            .map(|digits| digits.iter().all(digit))
     };
+    let binary = |digit: &u8| matches!(digit, b'0' | b'1');
+    let whole = prefixed(b"0x", b"0X", u8::is_ascii_hexdigit)
+        .or_else(|| prefixed(b"0b", b"0B", binary))
+        .unwrap_or_else(|| match body.first() {
+            Some(b'0') => body.iter().all(|digit| matches!(digit, b'0'..=b'7')),
+            Some(_) => body.iter().all(u8::is_ascii_digit),
+            None => false,
+        });
     if !whole {
         return Reading::Name;
     }
@@ -1174,7 +1191,7 @@ fn qualifier(raw: &[u8], at: usize) -> Result<Option<Who>, ParseError> {
     }
     // libacl refuses a line end or a carriage return in a name but before
     // its first byte, where it keeps it; both are refused here. A number may
-    // follow either, as `strtoul` passes over them, and is loose.
+    // follow either, as `strtol` and `strtoul` pass over them, and is loose.
     let line_end = raw
         .iter()
         .position(|byte| matches!(byte, b'\n' | b'\r'))

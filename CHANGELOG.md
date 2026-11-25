@@ -80,10 +80,12 @@ changes, even when no signature of the public API does.
   `\ooo` and `\\` escapes.
 - `parse` refuses what libacl reads where libacl is loose. It refuses a
   qualifier libacl reads as a number in a form other than a decimal id.
-  Those forms are a sign, hexadecimal, a leading zero (octal to libacl) and
-  leading whitespace. It refuses a number past the range of an id, which
-  libacl 2.3 wraps and libacl 2.4 looks up as a name. It refuses an escape
-  giving a NUL or more than a byte.
+  Those forms are a sign, hexadecimal, binary, a leading zero (octal to
+  libacl) and leading whitespace. libacl reads binary (`0b1`) as a number
+  where it is built against glibc 2.38 or later, and as a name otherwise. It
+  refuses a number past the range of an id, which libacl 2.3 wraps and
+  libacl 2.4 looks up as a name. It refuses an escape giving a NUL or more
+  than a byte.
 - `parse` also refuses entries with no comma or line end between them, and a
   tag not followed directly by its colon. It refuses a comma that does not
   follow an entry on its line. It refuses a name beginning with a line end or
@@ -105,9 +107,10 @@ changes, even when no signature of the public API does.
   which needs no names.
 - `write`, which spells a list with numeric ids, and `write_named`, which
   spells it with the names the caller's lookups give. Names are escaped so
-  that libacl and `parse` read them back. A `Spelling` sets long or short
-  `Tags`, a newline or comma `Separator`, and `Names` alone or followed by
-  their ids.
+  that libacl and `parse` read them back. A name libacl reads as a number,
+  such as `0x10` or `0b1`, is written as its id. A `Spelling` sets long or
+  short `Tags`, a newline or comma `Separator`, and `Names` alone or followed
+  by their ids.
 - `Spelling::GNU_TAR`, GNU tar's spelling, and `Spelling::STAR`, star's, which
   libarchive writes too. `Spelling::STAR` records every name's id and escapes
   names. star, GNU tar and libarchive read it as the list, names that need

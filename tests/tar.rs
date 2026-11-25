@@ -46,6 +46,12 @@ const GROUPS: &[(&[u8], u32)] = &[
     (b"eq=g", 4258),
 ];
 
+/// Names the writing system gives that the tars' database lacks, each one a
+/// reader takes for a number where its system lacks the name: binary numbers,
+/// which libacl built against glibc 2.38 or later reads as numbers. The crate
+/// writes each entry naming one by its id, which every tar sets.
+const NUMBER_LIKE: &[(&[u8], u32)] = &[(b"0b0", 7000), (b"0B11", 7003), (b"+0b101", 7005)];
+
 /// Every spelling.
 const SPELLINGS: [Spelling; 8] = [
     Spelling::GNU_TAR,
@@ -72,13 +78,22 @@ fn group_id(name: &[u8]) -> Option<u32> {
         .map(|group| group.1)
 }
 
+/// The name the writing system gives user `id`: the database's, or one of
+/// [`NUMBER_LIKE`].
 fn user_name(id: u32) -> Option<&'static [u8]> {
-    USERS.iter().find(|user| user.1 == id).map(|user| user.0)
+    USERS
+        .iter()
+        .chain(NUMBER_LIKE)
+        .find(|user| user.1 == id)
+        .map(|user| user.0)
 }
 
+/// The name the writing system gives group `id`: the database's, or one of
+/// [`NUMBER_LIKE`].
 fn group_name(id: u32) -> Option<&'static [u8]> {
     GROUPS
         .iter()
+        .chain(NUMBER_LIKE)
         .find(|group| group.1 == id)
         .map(|group| group.0)
 }
@@ -109,8 +124,9 @@ fn perm(bits: u64) -> Perm {
 }
 
 /// A list naming up to six users and groups, from the database where
-/// `named` allows and otherwise by ids no name answers; or, now and then,
-/// a minimal one.
+/// `named` allows, and otherwise by ids the database names no one: ids the
+/// writing system names as a reader takes for a number ([`NUMBER_LIKE`]), and
+/// ids no name answers. Now and then, a minimal one.
 fn generated_list(rng: &mut Rng, named: impl Fn(&[u8]) -> bool) -> Acl {
     let mut entries = vec![
         Entry::new(Qualifier::UserObj, perm(rng.below(8))),
@@ -125,7 +141,9 @@ fn generated_list(rng: &mut Rng, named: impl Fn(&[u8]) -> bool) -> Acl {
     let mut seen = BTreeMap::new();
     for _ in 0..=rng.below(6) {
         let user = rng.below(2) == 0;
-        let id = if rng.below(4) == 0 {
+        let id = if rng.below(12) == 0 {
+            rng.pick(NUMBER_LIKE).1
+        } else if rng.below(4) == 0 {
             // An id no name answers, below the subordinate ids mapped.
             6000 + rng.below(50_000) as u32
         } else if user {
@@ -277,6 +295,17 @@ fn plain(name: &[u8]) -> bool {
         .any(|&byte| byte < 0x20 || byte == 0x7f || b" ,:#\\".contains(&byte))
 }
 
+/// Whether `acl` names anyone the writing system names as a reader takes for
+/// a number.
+fn names_number_like(acl: &Acl) -> bool {
+    acl.entries().iter().any(|entry| {
+        entry
+            .qualifier
+            .id()
+            .is_some_and(|id| NUMBER_LIKE.iter().any(|named| named.1 == id))
+    })
+}
+
 /// Whether the database names anyone in `acl` with a name a text escapes.
 fn escapes(acl: &Acl) -> bool {
     acl.entries().iter().any(|entry| match entry.qualifier {
@@ -297,13 +326,17 @@ fn gnu_tar_extracts_written_text_as_the_list() {
     };
     let mut rng = Rng::seeded(61);
     let seed = rng.seed();
-    let mut escaped = 0;
+    let (mut escaped, mut number_like) = (0, 0);
     for spelling in SPELLINGS {
         for round in 0..6 {
             let cases: Vec<Case> = (0..40)
                 .map(|index| Case::generated(&mut rng, index, &|_| true))
                 .collect();
             escaped += cases.iter().filter(|case| escapes(&case.access)).count();
+            number_like += cases
+                .iter()
+                .filter(|case| names_number_like(&case.access))
+                .count();
             let context = format!("seed {seed}, {spelling:?}, round {round}");
             let command = GNU_TAR.map(OsStr::new);
             extract_and_check(&mut oracle, &dir, &command, &cases, spelling, &context);
@@ -312,6 +345,10 @@ fn gnu_tar_extracts_written_text_as_the_list() {
     assert!(
         escaped > 200,
         "too few lists named someone escaped: {escaped}"
+    );
+    assert!(
+        number_like > 100,
+        "too few lists named someone by a number's name: {number_like}"
     );
     tidy(&mut oracle, &dir);
 }
@@ -369,7 +406,7 @@ fn bsdtar_extracts_written_text_as_the_list() {
     };
     let mut rng = Rng::seeded(62);
     let seed = rng.seed();
-    let mut escaped = 0;
+    let (mut escaped, mut number_like) = (0, 0);
     for spelling in SPELLINGS {
         // libarchive looks a name up as the text spells it, escapes and all,
         // and falls back on the id recorded beside it: so it reads a name
@@ -380,6 +417,10 @@ fn bsdtar_extracts_written_text_as_the_list() {
                 .map(|index| Case::generated(&mut rng, index, &named))
                 .collect();
             escaped += cases.iter().filter(|case| escapes(&case.access)).count();
+            number_like += cases
+                .iter()
+                .filter(|case| names_number_like(&case.access))
+                .count();
             let context = format!("seed {seed}, {spelling:?}, round {round}");
             let command = bsdtar_command(&bsdtar);
             extract_and_check(&mut oracle, &dir, &command, &cases, spelling, &context);
@@ -388,6 +429,10 @@ fn bsdtar_extracts_written_text_as_the_list() {
     assert!(
         escaped > 100,
         "too few lists named someone escaped: {escaped}"
+    );
+    assert!(
+        number_like > 100,
+        "too few lists named someone by a number's name: {number_like}"
     );
 
     // A name escaped without its id is one libarchive cannot resolve: it

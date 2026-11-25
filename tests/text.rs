@@ -60,6 +60,7 @@ const GROUPS: &[(&[u8], u32)] = &[
     (b"a\\nb", 5035),
     (b"a", 5036),
     (b"sp ace", 5037),
+    (b"0b0", 5040),
 ];
 
 fn user_id(name: &[u8]) -> Option<u32> {
@@ -244,7 +245,9 @@ fn judged_parsed(parsed: &Parsed) -> Option<Judged> {
 // The differences from libacl the text module's documentation states.
 
 /// A qualifier libacl reads as a number in another form than a decimal id,
-/// as C's `strtoul` reads one, or past the range of an id.
+/// as C's `strtol` or `strtoul` reads one, or past the range of an id; or a
+/// binary number, which libacl built against glibc 2.38 or later reads as a
+/// number, and built against an earlier one looks up as a name.
 const LOOSE_NUMBER: &str = "a number in another form than a decimal id";
 /// An escape giving a NUL, or a value past a byte.
 const ESCAPE: &str = "an escape giving a NUL or more than a byte";
@@ -283,7 +286,8 @@ const STATED: [&str; 8] = [
 /// Every text libacl's reader was asked about while the grammar was
 /// measured, as libacl 2.3.2 read it under the account database above: the
 /// text; libacl's reading; the crate's; and, where the two differ, the
-/// stated difference that is why.
+/// stated difference that is why. The libacl was Ubuntu's, built against
+/// glibc 2.39.
 const MEASURED: &[(&[u8], &str, &str, Option<&str>)] = &[
     (
         b"#c\nu::rw-\ng::r--\no::---",
@@ -928,6 +932,72 @@ const MEASURED: &[(&[u8], &str, &str, Option<&str>)] = &[
         "valid u::rw-,g::r--,g:8:r--,m::rwx,o::---",
         "Number { at: 9 }",
         Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:0b0:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:0:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:0b1:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:1:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:0B11:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:3:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g: 0b1:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:1:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:+0b101:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:5:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:-0b1:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:65535:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,u:0b1111101000:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,u:1000:r--,g::r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:\\060\\142\\060:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:0:r--,m::rwx,o::---",
+        "Number { at: 9 }",
+        Some(LOOSE_NUMBER),
+    ),
+    (
+        b"u::rw-,g:0b:r--,g::r--,m::rwx,o::---",
+        "refused",
+        "unresolved",
+        None,
+    ),
+    (
+        b"u::rw-,g:0b2:r--,g::r--,m::rwx,o::---",
+        "refused",
+        "unresolved",
+        None,
+    ),
+    (
+        b"u::rw-,g:0b12:r--,g::r--,m::rwx,o::---",
+        "refused",
+        "unresolved",
+        None,
     ),
     (
         b"u::rw-,g:1e3:r--,g::r--,m::rwx,o::---",
@@ -1929,6 +1999,57 @@ fn digits_past_the_last_id_are_names(libacl: &mut support::Oracle) -> bool {
     }
 }
 
+/// The readings of libacl built against a glibc before 2.38 of the texts in
+/// [`MEASURED`] it reads otherwise, measured with Debian 12's libacl 2.3.1
+/// (built against glibc 2.36) and the same account database, with the
+/// difference each states. Such a libacl calls `strtol` as C17 has it, which
+/// reads no binary number, so it looks one up as a name. [`MEASURED`] holds
+/// the readings of libacl built against glibc 2.38 or later, which calls the
+/// C23 form, which reads `0b` and binary digits.
+const MEASURED_BEFORE_GLIBC_2_38: &[(&[u8], &str, Option<&str>)] = &[
+    (
+        b"u::rw-,g:0b0:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:5040:r--,m::rwx,o::---",
+        Some(LOOSE_NUMBER),
+    ),
+    (b"u::rw-,g:0b1:r--,g::r--,m::rwx,o::---", "refused", None),
+    (b"u::rw-,g:0B11:r--,g::r--,m::rwx,o::---", "refused", None),
+    (b"u::rw-,g: 0b1:r--,g::r--,m::rwx,o::---", "refused", None),
+    (b"u::rw-,g:+0b101:r--,g::r--,m::rwx,o::---", "refused", None),
+    (b"u::rw-,g:-0b1:r--,g::r--,m::rwx,o::---", "refused", None),
+    (
+        b"u::rw-,u:0b1111101000:r--,g::r--,m::rwx,o::---",
+        "refused",
+        None,
+    ),
+    (
+        b"u::rw-,g:\\060\\142\\060:r--,g::r--,m::rwx,o::---",
+        "valid u::rw-,g::r--,g:5040:r--,m::rwx,o::---",
+        Some(LOOSE_NUMBER),
+    ),
+];
+
+/// Whether the libacl present reads a binary number as a number, as libacl
+/// built against glibc 2.38 or later does, rather than looking it up as a
+/// name: the account database holds a group named `0b0`.
+fn binary_is_a_number(libacl: &mut support::Oracle) -> bool {
+    let named = group_id(b"0b0").expect("the database names a group 0b0");
+    let read = match libacl.read(b"u::rw-,g::r--,g:0b0:r--,m::rwx,o::---") {
+        Reading::Valid(value) => xattr::decode(&value).ok().flatten(),
+        _ => None,
+    };
+    match read.map(|acl| {
+        (
+            acl.perm(Qualifier::Group(0)),
+            acl.perm(Qualifier::Group(named)),
+        )
+    }) {
+        Some((Some(_), None)) => true,
+        Some((None, Some(_))) => false,
+        other => panic!("libacl read a text naming the group 0b0 as {other:?}"),
+    }
+}
+
 /// Whether a qualifier field, its `\ooo` escapes decoded, is digits past the
 /// last id with no leading zero.
 fn digits_past_the_last_id(field: &[u8]) -> bool {
@@ -2019,6 +2140,20 @@ fn every_text_libacl_was_asked_about_parses_as_measured() {
         );
         assert!(stated.is_none_or(|s| s == DIGITS_AS_NAME), "{shown:?}");
     }
+    for &(text, libacl, stated) in MEASURED_BEFORE_GLIBC_2_38 {
+        let shown = String::from_utf8_lossy(text);
+        let &(_, _, crate_says, _) = MEASURED
+            .iter()
+            .find(|row| row.0 == text)
+            .unwrap_or_else(|| panic!("{shown:?} is not in MEASURED"));
+        assert_eq!(
+            agree(libacl, crate_says),
+            stated.is_none(),
+            "{shown:?}: libacl before glibc 2.38 {libacl}, the crate {crate_says}, \
+             stated {stated:?}"
+        );
+        assert!(stated.is_none_or(|s| s == LOOSE_NUMBER), "{shown:?}");
+    }
 
     // libacl still reads each as recorded, where it can be asked. Where both
     // read a list their checkers refuse, the crate's rules make the same of
@@ -2027,18 +2162,27 @@ fn every_text_libacl_was_asked_about_parses_as_measured() {
         return;
     };
     let names = digits_past_the_last_id_are_names(&mut libacl);
+    let binary = binary_is_a_number(&mut libacl);
     let mut invalid_to_both = 0;
     for &(text, recorded, crate_says, _) in MEASURED {
         let shown = String::from_utf8_lossy(text);
         let recorded = MEASURED_2_4
             .iter()
             .find(|row| names && row.0 == text)
-            .map_or(recorded, |row| row.1);
+            .map(|row| row.1)
+            .or_else(|| {
+                MEASURED_BEFORE_GLIBC_2_38
+                    .iter()
+                    .find(|row| !binary && row.0 == text)
+                    .map(|row| row.1)
+            })
+            .unwrap_or(recorded);
         let reading = libacl.read(text);
         assert_eq!(
             libacl_notation(&reading),
             recorded,
-            "{shown:?}, libacl reading digits past the last id as a name: {names}"
+            "{shown:?}, libacl reading digits past the last id as a name: {names}, \
+             binary as a number: {binary}"
         );
         if let (Reading::Invalid { value, .. }, true) =
             (&reading, crate_says.starts_with("invalid"))
@@ -2287,6 +2431,13 @@ fn mutate(rng: &mut Rng, generated: &mut Generated) {
                     b"-0",
                     b"0x",
                     b"08",
+                    b"0b0",
+                    b"0b1",
+                    b"0B11",
+                    b"+0b1",
+                    b" 0b1",
+                    b"0b",
+                    b"0b12",
                     b"1e3",
                     b"3dg",
                     b"0x1g",
@@ -3864,8 +4015,19 @@ fn a_list_is_written_as_gnu_tar_writes_its_text_and_read_back() {
         b"user::rw-\nuser:root:r--\nuser:4242:r-x\ngroup::r--\ngroup:4243:rw-\nmask::rwx\nother::---\n"
     );
     assert_eq!(read(&named), acl);
-    // A name a text could not say is written as the id.
-    for name in [&b""[..], b"a\0b", b"4242", b"0x10", b" 12"] {
+    // A name a text could not say, or that a reader could take for another
+    // id, is written as the id.
+    for name in [
+        &b""[..],
+        b"a\0b",
+        b"4242",
+        b"0x10",
+        b" 12",
+        b"0b1",
+        b"0B11",
+        b"+0b101",
+        b" 0b1",
+    ] {
         let written = text::write_named(
             &acl,
             Spelling::new(Tags::Short, Separator::Comma, Names::WithIds),
