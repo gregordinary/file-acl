@@ -252,6 +252,8 @@ impl Acl {
             }
         }
         if named && !held {
+            // Room for the one entry, where `push` alone would double it.
+            entries.reserve_exact(1);
             entries.push(Entry::new(Qualifier::Mask, mask));
         }
         Acl::new(entries)
