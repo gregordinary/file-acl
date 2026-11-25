@@ -134,7 +134,6 @@
 //! name, libarchive falls back on the id, and star does either. The tests
 //! extract text written in each spelling with GNU tar and bsdtar.
 
-use alloc::string::ToString as _;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -895,22 +894,12 @@ pub fn write_named<U: AsRef<[u8]>, G: AsRef<[u8]>>(
     mut user: impl FnMut(u32) -> Option<U>,
     mut group: impl FnMut(u32) -> Option<G>,
 ) -> Vec<u8> {
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(len_by_id(acl, spelling));
     for (index, entry) in acl.entries().iter().enumerate() {
         if index > 0 && spelling.separator == Separator::Comma {
             out.push(b',');
         }
-        let tag = entry.qualifier.tag();
-        out.extend_from_slice(match (tag, spelling.tags) {
-            (Tag::UserObj | Tag::User, Tags::Long) => b"user:".as_slice(),
-            (Tag::GroupObj | Tag::Group, Tags::Long) => b"group:",
-            (Tag::Mask, Tags::Long) => b"mask:",
-            (Tag::Other, Tags::Long) => b"other:",
-            (Tag::UserObj | Tag::User, Tags::Short) => b"u:",
-            (Tag::GroupObj | Tag::Group, Tags::Short) => b"g:",
-            (Tag::Mask, Tags::Short) => b"m:",
-            (Tag::Other, Tags::Short) => b"o:",
-        });
+        out.extend_from_slice(tag_text(entry.qualifier.tag(), spelling.tags));
         let named = match entry.qualifier {
             Qualifier::User(id) => {
                 write_qualifier(&mut out, id, user(id).as_ref().map(AsRef::as_ref)).then_some(id)
@@ -924,13 +913,74 @@ pub fn write_named<U: AsRef<[u8]>, G: AsRef<[u8]>>(
         out.extend_from_slice(&entry.perm.letters());
         if let (Some(id), Names::WithIds) = (named, spelling.names) {
             out.push(b':');
-            out.extend_from_slice(id.to_string().as_bytes());
+            write_id(&mut out, id);
         }
         if spelling.separator == Separator::Newline {
             out.push(b'\n');
         }
     }
     out
+}
+
+/// A tag as `tags` spells it, with the colon that follows it.
+fn tag_text(tag: Tag, tags: Tags) -> &'static [u8] {
+    match (tag, tags) {
+        (Tag::UserObj | Tag::User, Tags::Long) => b"user:",
+        (Tag::GroupObj | Tag::Group, Tags::Long) => b"group:",
+        (Tag::Mask, Tags::Long) => b"mask:",
+        (Tag::Other, Tags::Long) => b"other:",
+        (Tag::UserObj | Tag::User, Tags::Short) => b"u:",
+        (Tag::GroupObj | Tag::Group, Tags::Short) => b"g:",
+        (Tag::Mask, Tags::Short) => b"m:",
+        (Tag::Other, Tags::Short) => b"o:",
+    }
+}
+
+/// The length of `acl`'s text in `spelling` with every user and group named
+/// by id, as [`write()`] writes it. [`write_named`] starts from this much
+/// room, and grows it only for names longer than their ids.
+fn len_by_id(acl: &Acl, spelling: Spelling) -> usize {
+    // Each entry is its tag and colon, its id, a colon, three permission
+    // letters, and a line end after it or a comma before the next.
+    let len = acl.entries().iter().fold(0usize, |len, entry| {
+        len.saturating_add(tag_text(entry.qualifier.tag(), spelling.tags).len())
+            .saturating_add(entry.qualifier.id().map_or(0, id_len))
+            .saturating_add(5)
+    });
+    match spelling.separator {
+        Separator::Newline => len,
+        // No comma after the last entry.
+        Separator::Comma => len.saturating_sub(1),
+    }
+}
+
+/// The number of decimal digits in `id`.
+fn id_len(id: u32) -> usize {
+    id.checked_ilog10()
+        .and_then(|log| usize::try_from(log).ok())
+        .map_or(1, |log| log.saturating_add(1))
+}
+
+/// Writes `id` in decimal, with no buffer of its own.
+///
+/// It is kept out of line: inlined where it is called, it adds more code
+/// than the call saves, and writes no faster.
+#[inline(never)]
+fn write_id(out: &mut Vec<u8>, id: u32) {
+    let start = out.len();
+    let mut rest = id;
+    loop {
+        // A digit, below ten, takes the low four bits of `b'0'`, which are
+        // clear, so `|` adds it.
+        out.push(b'0' | u8::try_from(rest % 10).unwrap_or(0));
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    if let Some(digits) = out.get_mut(start..) {
+        digits.reverse();
+    }
 }
 
 /// Writes a named entry's qualifier: `name`, escaped, where the text can say
@@ -946,7 +996,7 @@ fn write_qualifier(out: &mut Vec<u8>, id: u32, name: Option<&[u8]>) -> bool {
             && !name.iter().all(u8::is_ascii_digit)
     });
     let Some(name) = name else {
-        out.extend_from_slice(id.to_string().as_bytes());
+        write_id(out, id);
         return false;
     };
     for &byte in name {
@@ -1318,7 +1368,8 @@ fn unescape(raw: &[u8], at: usize, decoded: &mut Vec<u8>) -> Result<(), ParseErr
 mod tests {
     use alloc::vec::Vec;
 
-    use super::{Parsed, Who, parse};
+    use super::{Names, Parsed, Separator, Spelling, Tags, Who, parse, write};
+    use crate::{Acl, Entry, Perm, Qualifier};
 
     /// The room `parsed` holds its names in, in bytes.
     fn name_room(parsed: &Parsed) -> usize {
@@ -1363,5 +1414,36 @@ mod tests {
             .with_computed_mask();
         assert_eq!(parsed.entries.len(), 5);
         assert_eq!(parsed.entries.capacity(), parsed.entries.len());
+    }
+
+    /// A list written by id is written into exactly the room it takes, in
+    /// every spelling, whatever the number of its ids' digits.
+    #[test]
+    fn a_list_written_by_id_takes_its_room_and_no_more() {
+        let mut acls = alloc::vec![Acl::from_mode(0o640)];
+        for ids in [[0, 9], [10, 4_294_967_294], [1_000, 99_999]] {
+            let read = |qualifier| Entry::new(qualifier, Perm::READ);
+            let acl = Acl::new(alloc::vec![
+                Entry::new(Qualifier::UserObj, Perm::READ | Perm::WRITE),
+                read(Qualifier::User(ids[0])),
+                read(Qualifier::User(ids[1])),
+                read(Qualifier::GroupObj),
+                read(Qualifier::Group(ids[0])),
+                read(Qualifier::Mask),
+                read(Qualifier::Other),
+            ])
+            .expect("the entries are a list");
+            acls.push(acl);
+        }
+        for acl in &acls {
+            for tags in [Tags::Long, Tags::Short] {
+                for separator in [Separator::Newline, Separator::Comma] {
+                    for names in [Names::Alone, Names::WithIds] {
+                        let written = write(acl, Spelling::new(tags, separator, names));
+                        assert_eq!(written.capacity(), written.len());
+                    }
+                }
+            }
+        }
     }
 }
