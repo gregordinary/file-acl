@@ -134,6 +134,8 @@ trip.
 ```sh
 cargo fmt --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --check --manifest-path fuzz/Cargo.toml
+cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
 cargo test --workspace --all-features
 cargo doc --workspace --all-features --no-deps    # RUSTDOCFLAGS='-D warnings'
 cargo build --lib --target thumbv7em-none-eabihf
@@ -142,9 +144,10 @@ cargo deny check licenses advisories sources
 cargo deny --manifest-path fuzz/Cargo.toml check licenses advisories sources
 ```
 
-The fifth builds the library for a target with no standard library. The sixth
-checks the minimum supported Rust version, which sits below the pinned
-toolchain, and needs that toolchain installed. The last two check the
+The third and fourth format and lint the fuzzing harness, a workspace of its
+own. The seventh builds the library for a target with no standard library.
+The eighth checks the minimum supported Rust version, which sits below the
+pinned toolchain, and needs that toolchain installed. The last two check the
 licenses, advisories and sources of two dependency graphs: the library's,
 and the fuzzing harness's, which holds the only third-party crates. They
 need [cargo-deny](https://github.com/EmbarkStudios/cargo-deny).

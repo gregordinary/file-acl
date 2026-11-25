@@ -39,6 +39,13 @@ jobs:
         # The panic-freedom lints in src/lib.rs are denied outright; -D warnings
         # adds everything else clippy warns about.
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Format and lint the fuzzing harness
+        # The harness is a workspace of its own, which the two steps above do
+        # not reach. rust-toolchain.toml applies in fuzz/ too, so the same
+        # pinned rustfmt and clippy check it.
+        run: |
+          cargo fmt --check --manifest-path fuzz/Cargo.toml
+          cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
       - name: Lift the user-namespace restriction
         # Ubuntu 23.10 and later restrict unprivileged user namespaces through
         # AppArmor; the comparison tests enter one to read lists as a process

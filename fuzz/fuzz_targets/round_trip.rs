@@ -153,7 +153,7 @@ fuzz_target!(|input: &[u8]| {
             "{shown:?}"
         );
         // Some of the names answered: the ids the input's length picks.
-        let picked = |id: u32| (id ^ input.len() as u32) % 3 != 0;
+        let picked = |id: u32| !(id ^ input.len() as u32).is_multiple_of(3);
         let partial = parsed.resolve_partial(
             |name: &[u8]| user_id(name).filter(|&id| picked(id)),
             |name: &[u8]| group_id(name).filter(|&id| picked(id)),
@@ -167,8 +167,16 @@ fuzz_target!(|input: &[u8]| {
             // were looked up can be left out.
             let (mut user_names, mut group_names) = (BTreeSet::new(), BTreeSet::new());
             let _ = parsed.resolve(
-                |name: &[u8]| user_id(name).inspect(|&id| drop(user_names.insert(id))),
-                |name: &[u8]| group_id(name).inspect(|&id| drop(group_names.insert(id))),
+                |name: &[u8]| {
+                    user_id(name).inspect(|&id| {
+                        user_names.insert(id);
+                    })
+                },
+                |name: &[u8]| {
+                    group_id(name).inspect(|&id| {
+                        group_names.insert(id);
+                    })
+                },
                 Prefer::Name,
             );
             let uid = |id: u32| (!user_names.contains(&id) || picked(id)).then_some(id);

@@ -36,9 +36,11 @@ const SPELLINGS: [Spelling; 8] = [
 /// byte is even.
 fn lookup(name: &[u8]) -> Option<u32> {
     match name.last() {
-        Some(last) if last % 2 == 0 => {
-            Some(name.iter().fold(0u32, |id, &b| id.wrapping_mul(31).wrapping_add(u32::from(b))) % 1_000_000)
-        }
+        Some(last) if last % 2 == 0 => Some(
+            name.iter().fold(0u32, |id, &b| {
+                id.wrapping_mul(31).wrapping_add(u32::from(b))
+            }) % 1_000_000,
+        ),
         _ => None,
     }
 }
@@ -78,14 +80,24 @@ fn round_trip(acl: &Acl, prefix: &[u8]) {
     };
     for spelling in SPELLINGS {
         let numeric = text::write(acl, spelling);
-        let parsed = text::parse(&numeric).expect("written text parses").expect("a list");
-        assert_eq!(parsed.resolve(|_| None, |_| None, Prefer::Name).as_ref(), Ok(acl));
+        let parsed = text::parse(&numeric)
+            .expect("written text parses")
+            .expect("a list");
+        assert_eq!(
+            parsed.resolve(|_| None, |_| None, Prefer::Name).as_ref(),
+            Ok(acl)
+        );
 
         let named = text::write_named(acl, spelling, name, name);
-        let parsed = text::parse(&named).expect("written names parse").expect("a list");
+        let parsed = text::parse(&named)
+            .expect("written names parse")
+            .expect("a list");
         assert_eq!(parsed.resolve(id_of, id_of, Prefer::Name).as_ref(), Ok(acl));
         if spelling.names == Names::WithIds {
-            assert_eq!(parsed.resolve(|_| None, |_| None, Prefer::Name).as_ref(), Ok(acl));
+            assert_eq!(
+                parsed.resolve(|_| None, |_| None, Prefer::Name).as_ref(),
+                Ok(acl)
+            );
         }
     }
 }
@@ -112,7 +124,10 @@ fuzz_target!(|input: &[u8]| {
                 }
             }
             let _ = parsed.narrowed();
-            let _ = parsed.clone().with_computed_mask().resolve(lookup, lookup, Prefer::Name);
+            let _ = parsed
+                .clone()
+                .with_computed_mask()
+                .resolve(lookup, lookup, Prefer::Name);
             if let Err(error) = parsed.resolve(|_| None, |_| None, Prefer::Name) {
                 let _ = error.to_string();
             }
