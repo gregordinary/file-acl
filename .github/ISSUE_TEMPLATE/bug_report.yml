@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a list file-acl reads or writes otherwise than the kernel, libacl or GNU tar, or another defect.
+description: Report a list file-acl reads or writes otherwise than the kernel, libacl, GNU tar, bsdtar or star, or another defect.
 labels: ["bug"]
 body:
   - type: markdown
@@ -36,14 +36,16 @@ body:
     attributes:
       label: What the reference and file-acl answer
       description: >
-        What the kernel, `getfacl`, `setfacl` or GNU tar does with the input,
-        and what file-acl returned.
+        What the kernel, `getfacl`, `setfacl`, GNU tar, bsdtar (libarchive)
+        or star does with the input, and what file-acl returned.
       render: text
   - type: input
     id: references
     attributes:
       label: Reference versions
-      description: The kernel, libacl or GNU tar version you compared with.
+      description: >
+        The kernel, libacl, GNU tar, libarchive or star version you compared
+        with.
   - type: input
     id: version
     attributes:

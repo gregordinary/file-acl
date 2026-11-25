@@ -315,6 +315,11 @@ pub struct Acl {
 impl Acl {
     /// The list of `entries`, in any order, put in canonical order.
     ///
+    /// A list can hold more entries than
+    /// [`xattr::MAX_ENTRIES`](crate::xattr::MAX_ENTRIES), which the kernel
+    /// refuses to set. A caller that sets the list compares its length first,
+    /// as [`xattr::encode`](crate::xattr::encode) says.
+    ///
     /// # Errors
     ///
     /// [`Invalid`] naming the first rule the entries break, found in this

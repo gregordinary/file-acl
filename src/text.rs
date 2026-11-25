@@ -251,11 +251,16 @@ impl Parsed {
     /// The list the text states, each name read through `user` or `group`:
     /// the id the caller's account database gives it.
     ///
-    /// The lookups are asked in the order the text gives its entries, and no
-    /// further once one has no answer. A name is passed as the text holds it,
-    /// its escapes decoded. An entry naming an id asks neither lookup. Where an
-    /// entry holds both a name and, in a fourth field, an id, `prefer` says
-    /// which it is given.
+    /// The lookups are asked in the order the text gives its entries. They
+    /// stop at the first name with neither an answer nor a recorded id. A
+    /// name is passed as the text holds it, its escapes decoded. An entry
+    /// naming an id asks neither lookup. Where an entry holds both a name
+    /// and, in a fourth field, an id, `prefer` says which it is given.
+    ///
+    /// A text can state a list of more entries than
+    /// [`xattr::MAX_ENTRIES`](crate::xattr::MAX_ENTRIES), which the kernel
+    /// refuses to set. A caller that sets the list compares its length first,
+    /// as [`xattr::encode`](crate::xattr::encode) says.
     ///
     /// ```
     /// use file_acl::text::{self, Prefer, ResolveError};

@@ -16,8 +16,9 @@ order are the kernel's and libacl's. Around that model, it covers:
   prints. It reads the text as libacl does, but for the differences its
   `text` module lists, and resolves names through lookups the caller gives.
   It writes the text as GNU tar does, with names where the caller has them.
-  It can also write each name's id beside it, as star and libarchive do, and
-  star, GNU tar and libarchive all read that form.
+  It can also write each name's id beside it, as star and libarchive do.
+  star, GNU tar and libarchive all read that form in star's spelling
+  (`Spelling::STAR`).
 - The rules that tie a list to a file's mode, as the kernel keeps them. They
   say what setting a list does to the mode, whether the list is stored, and
   what `chmod` does to it. They also give the list to set in place of one a
