@@ -1322,8 +1322,8 @@ fn qualifier<'d>(
 }
 
 /// Writes `raw` with its escapes decoded into `decoded`, in place of what it
-/// held: `\` and three octal digits as the byte they give, `\\` as one
-/// backslash, and any other backslash as itself.
+/// held. A `\` and three octal digits become the byte they give, `\\` one
+/// backslash, and any other backslash stays itself.
 fn unescape(raw: &[u8], at: usize, decoded: &mut Vec<u8>) -> Result<(), ParseError> {
     decoded.clear();
     decoded.reserve(raw.len());
