@@ -10,7 +10,10 @@ The lists file-acl accepts and refuses, and the bytes and text it writes for
 them, are part of its contract. A change to either is recorded, with what it
 changes, even when no signature of the public API does.
 
-## [Unreleased]
+## [0.1.0] - 2026-11-25
+
+The first release, measured against Linux 7.2, libacl 2.3.2 and GNU tar 1.35
+as Ubuntu 24.04 packages them, libacl 2.4.0, bsdtar 3.8.11 and star 1.7.0.
 
 ### Added
 
@@ -117,3 +120,54 @@ changes, even when no signature of the public API does.
   libarchive writes too. `Spelling::STAR` records every name's id and escapes
   names. star, GNU tar and libarchive read it as the list, names that need
   escaping included.
+
+### Agreement with the references
+
+- 50 values the kernel was measured answering, and 3,000 generated values on
+  each of two filesystems, one a tmpfs. `decode` gives each the kernel's
+  verdict, but for a value naming a user or group twice, which the kernel
+  stores. The kernel holds `encode`'s value for 500 generated lists on each,
+  byte for byte.
+- 1,500 generated cases of `mode::set` on each filesystem, on files,
+  directories, FIFOs, sockets, symbolic links and character devices. Each
+  gives the mode and the lists the kernel leaves, or the kernel's refusal.
+  `with_mode` gives the access list `chmod` leaves, for 500 generated lists
+  on each.
+- 120 generated lists, with `access(2)` asked for 12 credentials under each.
+  For the owner, and for anyone the list does not name, it answers the same
+  under `Acl::narrowed`.
+- 1,000 generated lists, set or read across a user namespace whose map does
+  not keep the order of ids. The kernel translates each as `map_ids` does.
+  Where the namespace does not map an id, `decode` and `map_ids` name the
+  same entry.
+- 6,000 generated lists, 3,000 of them with one fault. `Acl::new` accepts
+  each where libacl's `acl_check` passes it, and names the fault
+  `acl_check` reports.
+- All 4,096 modes, and 4,000 generated lists, through libacl's rules for a
+  mode. `from_mode` gives `acl_from_mode`'s list, and `mode_bits` and
+  `is_minimal` give `acl_equiv_mode`'s answers. `with_computed_mask` gives
+  `acl_calc_mask`'s list, but for entries naming no one and holding no mask.
+- 339 texts libacl 2.3.2 was measured reading, 26 of them naming users and
+  groups a files database cannot hold. `parse` reads 261 as libacl does, and
+  the other 78 differ as the `text` module states. libacl 2.4.0 reads 8 of
+  them otherwise, and 3 of those differ as stated.
+- 8,000 generated texts, read by libacl and by `parse` through the same
+  account database. Each is read alike, or differs as the `text` module
+  states.
+- 1,500 generated lists, written by id and by name in the four spellings that
+  record no ids. libacl reads each text as the list.
+- 1,920 files and directories in archives of the crate's text, 240 in each
+  spelling. GNU tar extracts each with the lists the text states, and the
+  mode they give. bsdtar extracts 1,920 more the same way, with names that
+  need escaping only where the spelling records ids.
+- 320 files and directories archived by GNU tar, and 320 by bsdtar. `parse`
+  reads each record as the list set.
+- The records GNU tar 1.35 was measured writing for 7 members, libarchive
+  3.8.11 for 3 and star 1.7.0 for 4. `parse` reads each as the list set, but
+  one GNU tar cut at a `#` in a name, which no reader reads. For GNU tar's
+  other 6, `write_named` spells each stored list as GNU tar's text, byte for
+  byte.
+- The crate's `Spelling::STAR` text of 22 lists, from which star 1.7.0 sets
+  each list.
+
+[0.1.0]: https://github.com/gregordinary/file-acl/releases/tag/v0.1.0
