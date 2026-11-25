@@ -107,10 +107,12 @@ changes, even when no signature of the public API does.
   which needs no names.
 - `write`, which spells a list with numeric ids, and `write_named`, which
   spells it with the names the caller's lookups give. Names are escaped so
-  that libacl and `parse` read them back. A name libacl reads as a number,
-  such as `0x10` or `0b1`, is written as its id. A `Spelling` sets long or
-  short `Tags`, a newline or comma `Separator`, and `Names` alone or followed
-  by their ids.
+  that libacl and `parse` read them back. A name a reader could take for a
+  number is written as its id. Such a name is one libacl reads as a number,
+  such as `0x10` or `0b1`. It is also one of digits alone, such as `08`,
+  which libarchive reads as a decimal id where its system lacks the name. A
+  `Spelling` sets long or short `Tags`, a newline or comma `Separator`, and
+  `Names` alone or followed by their ids.
 - `Spelling::GNU_TAR`, GNU tar's spelling, and `Spelling::STAR`, star's, which
   libarchive writes too. `Spelling::STAR` records every name's id and escapes
   names. star, GNU tar and libarchive read it as the list, names that need

@@ -120,7 +120,9 @@
 //! libarchive (bsdtar) reads the text with a reader of its own. It decodes no
 //! escape, and looks a name up as the text spells it. Where the lookup has no
 //! answer, it takes the recorded id. It looks a qualifier of digits up as a
-//! name before reading it as an id.
+//! name before reading it as an id. Where that lookup has no answer, it reads
+//! the digits as a decimal id, leading zeros included (`08` is 8), and not
+//! the recorded id.
 //!
 //! star reads a fourth field only in [`Spelling::STAR`]'s form: long tags, and
 //! commas with no blanks after them. It takes the name where the reader's
@@ -844,10 +846,12 @@ pub fn write(acl: &Acl, spelling: Spelling) -> Vec<u8> {
 /// Where `spelling` writes [`Names::WithIds`], each entry written by name is
 /// followed by its id.
 ///
-/// The id is written in place of a name the text could not say. Such a name
-/// is empty, holds a NUL, or is one libacl would read as a number (`4242`,
-/// `0x10`, `0b1`). The lookups are asked about the named entries in
-/// canonical order.
+/// The id is written in place of a name the text could not say, or that a
+/// reader could take for another id. Such a name is empty, holds a NUL, or is
+/// one libacl would read as a number (`4242`, `0x10`, `0b1`). It is also a
+/// name of digits alone (`08`), which libarchive reads as a decimal id where
+/// its system lacks the name. The lookups are asked about the named entries
+/// in canonical order.
 ///
 /// [`parse`] and [`Parsed::resolve`], with lookups that give each name its
 /// id, read the text back as `acl`. libacl reads it back as `acl` too, given
@@ -901,8 +905,15 @@ pub fn write_named<U: AsRef<[u8]>, G: AsRef<[u8]>>(
 /// Writes a named entry's qualifier: `name`, escaped, where the text can say
 /// it, and `id` otherwise. Whether it wrote the name.
 fn write_qualifier(out: &mut Vec<u8>, id: u32, name: Option<&[u8]>) -> bool {
-    let name = name
-        .filter(|name| !name.is_empty() && !name.contains(&0) && reading(name) == Reading::Name);
+    // libarchive reads a name of digits alone, leading zeros included, as a
+    // decimal id where its system lacks the name, though libacl reads `08`
+    // as a name.
+    let name = name.filter(|name| {
+        !name.is_empty()
+            && !name.contains(&0)
+            && reading(name) == Reading::Name
+            && !name.iter().all(u8::is_ascii_digit)
+    });
     let Some(name) = name else {
         out.extend_from_slice(id.to_string().as_bytes());
         return false;

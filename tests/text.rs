@@ -4027,6 +4027,10 @@ fn a_list_is_written_as_gnu_tar_writes_its_text_and_read_back() {
         b"0B11",
         b"+0b101",
         b" 0b1",
+        b"08",
+        b"09",
+        b"0128",
+        b"007",
     ] {
         let written = text::write_named(
             &acl,

@@ -47,10 +47,18 @@ const GROUPS: &[(&[u8], u32)] = &[
 ];
 
 /// Names the writing system gives that the tars' database lacks, each one a
-/// reader takes for a number where its system lacks the name: binary numbers,
+/// reader takes for a number where its system lacks the name: digits with a
+/// leading zero, which libarchive reads as a decimal id, and binary numbers,
 /// which libacl built against glibc 2.38 or later reads as numbers. The crate
 /// writes each entry naming one by its id, which every tar sets.
-const NUMBER_LIKE: &[(&[u8], u32)] = &[(b"0b0", 7000), (b"0B11", 7003), (b"+0b101", 7005)];
+const NUMBER_LIKE: &[(&[u8], u32)] = &[
+    (b"08", 7008),
+    (b"09", 7009),
+    (b"0128", 7128),
+    (b"0b0", 7000),
+    (b"0B11", 7003),
+    (b"+0b101", 7005),
+];
 
 /// Every spelling.
 const SPELLINGS: [Spelling; 8] = [
