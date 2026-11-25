@@ -226,3 +226,58 @@ jobs:
         # a reviewable diff rather than passing unnoticed. Regenerate it with
         # the command above and commit the result.
         run: git diff --exit-code -- public-api.txt
+
+  semver:
+    name: Compatibility with the last release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The baseline is the newest release tag, so this job needs the
+          # history and its tags rather than the single commit a checkout
+          # fetches by default.
+          fetch-depth: 0
+      - name: Install Rust (pinned)
+        run: rustup toolchain install
+      - name: Cache the build
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-semver-checks@0.51.0
+      - name: Document the last release and the tree, each from its own lockfile
+        # The baseline is the newest `v*` tag reachable from the commit before
+        # this one: the release this change would follow, and on a release
+        # commit itself the release before it.
+        #
+        # Both sides are built here with `--locked`, each from its own
+        # lockfile, rather than by cargo-semver-checks, which resolves a
+        # side's dependencies afresh. rustup reads rust-toolchain.toml from
+        # the working directory, so the tree's pinned toolchain documents both
+        # sides, in one JSON format. `RUSTC_BOOTSTRAP` lets that stable
+        # toolchain emit rustdoc's JSON, as cargo-semver-checks itself does.
+        env:
+          RUSTC_BOOTSTRAP: '1'
+        run: |
+          baseline="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^)"
+          echo "Comparing against $baseline"
+          mkdir -p "$RUNNER_TEMP/baseline"
+          git archive "$baseline" | tar -x -C "$RUNNER_TEMP/baseline"
+          cargo rustdoc --locked --manifest-path "$RUNNER_TEMP/baseline/Cargo.toml" \
+            -p file-acl --lib --all-features --target-dir "$RUNNER_TEMP/baseline-target" \
+            -- -Z unstable-options --output-format json
+          cargo rustdoc --locked -p file-acl --lib --all-features \
+            -- -Z unstable-options --output-format json
+      - name: Check the tree against the last release
+        # Fails on a breaking change the version does not declare. While
+        # `version` still names the last release, the tree is judged as a
+        # compatible release of it, so a breaking change fails here with the
+        # items it breaks listed. Bumping the version to the next breaking
+        # release (0.1.x to 0.2.0) turns it green. Every item listed takes a
+        # **Breaking.** entry in CHANGELOG.md.
+        run: |
+          cargo semver-checks check-release \
+            --baseline-rustdoc "$RUNNER_TEMP/baseline-target/doc/file_acl.json" \
+            --current-rustdoc target/doc/file_acl.json

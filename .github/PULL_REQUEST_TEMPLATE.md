@@ -29,6 +29,9 @@
       drive changed
 - [ ] The public surface is unchanged, **or** `public-api.txt` is regenerated
       and the diff is intentional
+- [ ] `cargo semver-checks` finds no breaking change, **or** the version
+      names the next breaking release, with a **Breaking.** changelog entry
+      per item listed
 
 ## What it accepts and writes
 

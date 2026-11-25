@@ -175,6 +175,18 @@ RUSTUP_TOOLCHAIN=nightly-2026-07-09 cargo public-api -p file-acl --all-features 
     --omit blanket-impls,auto-derived-impls > public-api.txt
 ```
 
+CI's `semver` job documents the newest release tag and the tree, and runs
+[cargo-semver-checks](https://github.com/obi1kenobi/cargo-semver-checks)
+between them. While `version` still names the last release, the job fails on
+a breaking change and lists the items it breaks. Bumping the version to the
+next breaking release, such as 0.1.x to 0.2.0, turns it green. Each item it
+listed then takes a **Breaking.** entry in CHANGELOG.md.
+
+The job sees only the API's signatures. A change in the lists file-acl
+accepts, or in what it writes, passes it, and is still recorded in the
+changelog. Run locally, `cargo semver-checks` compares the tree with the
+newest release on crates.io.
+
 ## Fuzzing
 
 `fuzz/` holds [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) targets,
